@@ -45,6 +45,8 @@ int draw_entity(entity* e, rect camera) {
 int init_entity(entity* ent, float h, char* path) {
     static int id = 0;
     entity e;
+    e.body.width = 0;
+    e.body.height = 0;
     memset(&e,0, sizeof(entity));
     e.image = LoadTexture(path);
     e.body.x = 0;
@@ -138,6 +140,10 @@ int main(void) {
         UnloadTexture(entities.data[i]->image);
     }
     free(entities.data);
+    for (int i = 0; i < a.pages_count; i++) {
+        free(a.pages[i]);
+    }
+    free(a.pages);
     entities.data = 0;
     return 0;
 }
