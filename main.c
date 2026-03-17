@@ -13,6 +13,11 @@
 #define winw 1200
 typedef Vector2 vec2;
 typedef Rectangle rect;
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+int load_env(const char *filename);
 
 typedef enum {
     attack_kind_none,
@@ -91,6 +96,8 @@ int draw_entity(entity* e, rect camera) {
             _rect(draw.x, draw.y, e->body.width, e->body.height),
             origin,
             r, WHITE);
+    draw = apply_camera(rect_pos(e->body), camera);
+    DrawRectangleLines(draw.x, draw.y, e->body.width, e->body.height, RED);
     return 1;
 }
 int init_entity(entity* ent, float h, char* path) {
@@ -213,6 +220,7 @@ int update(game* game) {
     return 0;
 }
 int main(void) {
+    load_env(".env");
     printf("Hello World!\n");
     InitWindow(winw, winh, "Hello Raylib");
     SetTargetFPS(60);
