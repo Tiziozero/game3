@@ -4,6 +4,7 @@
 #include "raylib.h"
 #include "raymath.h"
 #include "utils.h"
+#include <stdlib.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -207,6 +208,10 @@ bool entities_overlap(entity** entities, int count, int* out_a, int* out_b) {
     }
     return false;
 }
+int update(game* game) {
+    panic("todo");
+    return 0;
+}
 int main(void) {
     printf("Hello World!\n");
     InitWindow(winw, winh, "Hello Raylib");
@@ -216,7 +221,8 @@ int main(void) {
     int ecount = 0; // entities count
     new_dynarr(entity, entities);
     // take reference to player
-    entity* player = entities_new_entity(&a, &entities, 150.0f,"/home/kleidi/.tmp/$RPC8M8N/35a07685477d119f91d25f938e0df5193e29f6ae - Copy.jpg");
+
+    entity* player = entities_new_entity(&a, &entities, 150.0f,getenv("PLAYER_PATH"));
     entity_attack* pa1 = &player->attacks[0];
     pa1->attack_kind = attack_kind_projectile;
     pa1->projectile.kind=projectile_straight;
@@ -227,13 +233,14 @@ int main(void) {
     pa1->projectile.straight.radius=2; // radius of 2;
     pa1->projectile.straight.speed= 1000;
     entity* enemy;
-    enemy = entities_new_entity(&a, &entities, 120.0f,"/home/kleidi/.tmp/New folder/GwZQHkFXYAAYjkQ.jpg");
+    printf("Player :%s\n", getenv("PLAYER_PATH"));
+    enemy = entities_new_entity(&a, &entities, 120.0f,getenv("ENEMY1"));
     enemy->body.x = 200;
     enemy->body.y = 200;
-    enemy = entities_new_entity(&a, &entities, 120.0f,"/home/kleidi/.tmp/New folder/G0P8taRXoAAlmj_.jpg");
+    enemy = entities_new_entity(&a, &entities, 120.0f,getenv("ENEMY2"));
     enemy->body.x = -100;
     enemy->body.y = 150;
-    enemy = entities_new_entity(&a, &entities, 120.0f,"/home/kleidi/.tmp/HDjhNy5XAAAj08i?format=jpg.jpg");
+    enemy = entities_new_entity(&a, &entities, 120.0f,getenv("ENEMY3"));
     enemy->body.x = -100;
     enemy->body.y = -350;
     game game;
