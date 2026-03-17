@@ -1,6 +1,7 @@
 #ifndef UTILS_H
 #define UTILS_H
 #include "logger.h"
+#include "defines.h"
 #include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
