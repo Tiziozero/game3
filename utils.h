@@ -94,6 +94,13 @@ static inline Arena arena_new(size_t page_size, size_t item_size) {
          a.page_size, page_size, item_size);
     return a;
 }
+static inline void arena_free(Arena* a) {
+    if (!a) return;
+    for (int i = 0; i < a->pages_count; i++) {
+        free(a->pages[i]);
+    }
+    free(a->pages);
+}
 
 static inline void* arena_alloc(Arena* a, size_t size) {
     if (size > a->page_size) {

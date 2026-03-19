@@ -8,6 +8,7 @@
 #include <time.h>
 #include <unistd.h>
 
+int player_id;
 
 #define winh 750
 #define winw 1200
@@ -40,6 +41,7 @@ int dynarr_add(void* ptr, void* data) {
 }
 
 typedef struct {
+    int owner; // index
     float range;
     float damage;
     enum { projectile_straight, projectile_arc } kind; // like an arrow or mortar
@@ -47,6 +49,7 @@ typedef struct {
         struct {
             vec2 origin; // where it was shot from
             vec2 direction;
+            vec2 position; // current position
             float area; // 0 if single enemy on impact
             float radius; // projactile radius. used for collisions
             float speed;
@@ -88,7 +91,6 @@ int draw_entity(entity* e, rect camera) {
     if (body.x > camera.x+camera.width || body.x + body.width < camera.x) return 1;// skip
     if (body.y > camera.y+camera.height || body.y + body.height < camera.y) return 1;// skip
     vec2 origin = _vec(e->body.width/2, e->body.height/2);
-    // printf("drawing entity %d... ", e->id);
     float r = 0;
     vec2 draw = apply_camera(_vec(e->body.x+origin.x,e->body.y+origin.y) , camera);
     DrawTexturePro(e->image,
@@ -113,7 +115,7 @@ int init_entity(entity* ent, float h, char* path) {
     e.body.width  = scaler*(float)e.image.width;
     e.body.height = scaler*(float)e.image.height;
     e.id = id++;
-    printf("%d: w:h %f:%f\n", e.id, e.body.width, e.body.height);
+    dbg("%d: w:h %f:%f", e.id, e.body.width, e.body.height);
     *ent = e;
     return 1;
 }
@@ -135,14 +137,15 @@ void sort_entities_by_y(entity **arr, int n) {
     }
 }
 entity* entities_new_entity(Arena* a, dynarr_entity* entities, float h, char* path) {
-    entity* enemy_2 = arena_alloc(a, sizeof(entity));
-    init_entity(enemy_2, h, path);
-    enemy_2->body.x = 0;
-    enemy_2->body.y = 0;
-    entities->data[entities->count++] = enemy_2;
-    return enemy_2;
+    entity* e = arena_alloc(a, sizeof(entity));
+    init_entity(e, h, path);
+    e->body.x = 0;
+    e->body.y = 0;
+    entities->data[entities->count++] = e;
+    return e;
 }
 typedef struct {
+    char active;
     enum{ element_projectile } kind;
     union {
         projectile projectile;
@@ -153,19 +156,54 @@ typedef struct {
     dynarr_entity entities;
     vec2 mouse_pos;
     entity* player; // player
-    projectile projectiles[100];
+    element elements[100];
+    int energy;
+    int eps; // energy recovered per second.
+
+    Arena cycle_arena; // arena that gets reset every cycle for temporary stuff
+
+    Arena chat_arena; // arena for messages etc
+    char** logs; // circular buffer
+    int log_count; // at which to start
+    int log_cap; // at which to start
+
+    double dt;
+    
+    rect* camera;
 } game;
-int projectiles_add_new(
-    projectile projectiles[100], projectile p){
+int game_log(game*game, char*msg) {
+    if (game->log_count >= game->log_cap) {
+        game->logs = realloc(game->logs, (game->log_cap*=2)*sizeof(char*));
+        dbg("realloced chat %zu msgs cap", game->log_cap);
+    }
+    game->logs[game->log_count++] = msg;
+    return 1;
+}
+int game_new_element(
+    element elements[100], element e){
     for (int i = 0; i < 100; i++) {
-        if (projectiles[i].active == 0) {
-            p.active = 1;
-            projectiles[i] = p;
-            printf("added projectile.\n");
+        if (elements[i].active == 0) {
+            e.active = 1;
+            elements[i] = e;
+            dbg("added element.");
             return 1;
         }
     }
     return 0;
+}
+
+game* _getsetgame(int set, game* g) {
+    static game* game = 0;
+    if (set) {
+        game = g;
+    }
+    return game;
+}
+game* setgame(game* game) {
+    return _getsetgame(1, game);
+}
+game* getgame() {
+    return _getsetgame(0, 0);
 }
 
 int attack(game* g, entity* entity, int atk_index) {
@@ -184,17 +222,23 @@ int attack(game* g, entity* entity, int atk_index) {
                             // use center of screen, idc
                             vec2 direction = vec2norm(vec2sub(g->mouse_pos,
                                         _vec((float)winw/2, (float)winh/2)));
-                            printf("attackdiredction %f %f radius %f range %f.\n",
+                            dbg("attackdiredction %f %f radius %f range %f.",
                                     direction.x, direction.y,
                                     prjk.straight.radius, prjk.range);
                             projectile p = prjk;
                             p.straight.origin = origin;
+                            p.straight.position = origin;
                             p.straight.direction = direction;
                             p.start = get_time();
-                            if (!projectiles_add_new(g->projectiles,p)) {
+                            p.owner = player_id; // player
+                            element e = {0};
+                            e.kind = element_projectile;
+                            e.projectile = p;
+                            if (!game_new_element(g->elements,e)) {
                                 panic("failed to add projectile, likely full. handle.");
                                 return 0;
                             }
+                            dbg("new peojectile");
                         } break;
                     default: panic("unhandeled.");
                 }
@@ -219,18 +263,143 @@ int update(game* game) {
     panic("todo");
     return 0;
 }
+float point_rect_dist(vec2 p, rect r) {
+    // horizontal distance
+    float dx = fmax(r.x - p.x, 0.0f);
+    dx = fmax(dx, p.x - (r.x + r.width));
+    
+    // vertical distance
+    float dy = fmax(r.y - p.y, 0.0f);
+    dy = fmax(dy, p.y - (r.y + r.height));
+    
+    return sqrtf(dx*dx + dy*dy);
+}
+int projectile_body_hit(projectile* p, rect body, vec2 prev_pos);
+int element_handle(game* g, element* e) {
+    if (e->kind == element_projectile) {
+        projectile* p = &e->projectile;
+        if (p->kind == projectile_straight) {
+            vec2 o = p->straight.origin;
+            vec2 d = p->straight.direction;
+            float s = p->straight.speed;
+            float dt = (float)g->dt;
+            vec2 pos = p->straight.position;
+            vec2 prev = pos; // for intersection
+            // change in displacement
+            vec2 ds = vec2scale(vec2scale(d, s), dt);
+            pos = vec2add(pos, ds);
+            if (vec2len(vec2sub(pos, o)) >= p->range) {
+                info("Over");
+                e->active = 0; // set to inactive
+                return 1;
+            }
+            p->straight.position = pos; // update pos
+            float min_distance = 1e9; // why not
+            int target_index = -1;
+            int i = 0;
+            DrawLineV(apply_camera(prev, *g->camera), apply_camera(pos, *g->camera), GREEN);
+            while (i < g->entities.count) {
+                entity* ent = g->entities.data[i];
+                if (ent->id == p->owner) { i++; continue; } // skip
+                if(projectile_body_hit(p, ent->body, prev)) {
+                    rect b = ent->body;
+                    dbg("%f %f %f %f (%f %f)\n",b.x,b.y,b.width,b.height,pos.x, pos.y);
+                    // get shortest
+                    float d = point_rect_dist(prev, ent->body);
+                    if (d < min_distance) {
+                        min_distance = d;
+                        target_index = i;
+                        break; // handle more
+                    }
+                }
+                i++;
+            }
+            if (target_index != -1) { // if a hit
+                printf("HIT %d (%fm).\n", target_index, min_distance/50);
+                e->active = 0; // remove
+            }
+        } else  { panic("unhandeled element projectile kind."); return 0; }
+    } else  { panic("unhandeled element kind."); return 0; }
+    return 1;
+}
+bool point_in_rect(vec2 p, rect r) {
+    return p.x >= r.x && p.x <= r.x + r.width &&
+           p.y >= r.y && p.y <= r.y + r.height;
+}
+bool circle_rect_intersect(vec2 c, float r, rect rect) {
+    float closest_x = fmax(rect.x, fmin(c.x, rect.x + rect.width));
+    float closest_y = fmax(rect.y, fmin(c.y, rect.y + rect.height));
+
+    float dx = c.x - closest_x;
+    float dy = c.y - closest_y;
+
+    return (dx*dx + dy*dy) <= r*r;
+}
+
+// helper: line segment intersection
+bool line_intersect(vec2 p1, vec2 p2, vec2 q1, vec2 q2) {
+    float s1_x = p2.x - p1.x;
+    float s1_y = p2.y - p1.y;
+    float s2_x = q2.x - q1.x;
+    float s2_y = q2.y - q1.y;
+
+    float s = (-s1_y * (p1.x - q1.x) + s1_x * (p1.y - q1.y)) /
+              (-s2_x * s1_y + s1_x * s2_y);
+    float t = ( s2_x * (p1.y - q1.y) - s2_y * (p1.x - q1.x)) /
+              (-s2_x * s1_y + s1_x * s2_y);
+
+    return s >= 0 && s <= 1 && t >= 0 && t <= 1;
+}
+
+bool line_rect_intersect(vec2 p1, vec2 p2, rect r) {
+    // check endpoints
+    if (point_in_rect(p1, r) || point_in_rect(p2, r)) return true;
+
+    vec2 tl = {r.x, r.y};
+    vec2 tr = {r.x + r.width, r.y};
+    vec2 bl = {r.x, r.y + r.height};
+    vec2 br = {r.x + r.width, r.y + r.height};
+
+    // check each rectangle edge
+    if (line_intersect(p1, p2, tl, tr)) return true;
+    if (line_intersect(p1, p2, tr, br)) return true;
+    if (line_intersect(p1, p2, br, bl)) return true;
+    if (line_intersect(p1, p2, bl, tl)) return true;
+
+    return false;
+}
+// with updated position and prev
+int projectile_body_hit(projectile* p, rect body, vec2 prev_pos) {
+    if (p->kind == projectile_straight) {
+        if (circle_rect_intersect(
+                    p->straight.position, p->straight.radius, body)) {
+            // projectile directly hits body
+            return 1;
+        }
+        /*if (line_rect_intersect(p->straight.position, prev_pos, body)) {
+            return 1; // projectile has interescted body some time in change in pos
+        }*/
+        return 0; // else no intersection
+    } else  { panic("unhandeled."); return 0; }
+    return 0;
+}
 int main(void) {
     load_env(".env");
     printf("Hello World!\n");
     InitWindow(winw, winh, "Hello Raylib");
     SetTargetFPS(60);
+    game game;
+    memset(&game, 0, sizeof(game));
+    setgame(&game);
 
     Arena a = arena_new(1025, sizeof(entity));
     int ecount = 0; // entities count
-    new_dynarr(entity, entities);
-    // take reference to player
+    new_dynarr(entity, _entities);
 
-    entity* player = entities_new_entity(&a, &entities, 150.0f,getenv("PLAYER_PATH"));
+    game.entities = _entities;
+    // take reference to player
+    entity* player = entities_new_entity(&a, &game.entities, 150.0f,getenv("PLAYER_PATH"));
+    player_id = player->id;
     entity_attack* pa1 = &player->attacks[0];
     pa1->attack_kind = attack_kind_projectile;
     pa1->projectile.kind=projectile_straight;
@@ -240,27 +409,34 @@ int main(void) {
     pa1->projectile.straight.color = RED;
     pa1->projectile.straight.radius=2; // radius of 2;
     pa1->projectile.straight.speed= 1000;
-    entity* enemy;
     printf("Player :%s\n", getenv("PLAYER_PATH"));
-    enemy = entities_new_entity(&a, &entities, 120.0f,getenv("ENEMY1"));
+    entity* enemy = entities_new_entity(&a, &game.entities, 120.0f,getenv("ENEMY1"));
     enemy->body.x = 200;
     enemy->body.y = 200;
-    enemy = entities_new_entity(&a, &entities, 120.0f,getenv("ENEMY2"));
+    enemy = entities_new_entity(&a, &game.entities, 120.0f,getenv("ENEMY2"));
     enemy->body.x = -100;
     enemy->body.y = 150;
-    enemy = entities_new_entity(&a, &entities, 120.0f,getenv("ENEMY3"));
+    enemy = entities_new_entity(&a, &game.entities, 120.0f,getenv("ENEMY3"));
     enemy->body.x = -100;
     enemy->body.y = -350;
-    game game;
-    memset(&game, 0, sizeof(game));
+    game.log_cap = 10;
+    game.log_count = 0;
+    game.logs = malloc(game.log_cap*sizeof(char*));
 
+
+
+    info("Player index %d.", player_id);
+    int draw_logs = 1;
+    game.dt = 0;
     double last = get_time();
-
+    rect camera;
+    game.camera= &camera;
     while (!WindowShouldClose()) {
         // dt
         double now = get_time();
         double dt = now - last;
         last = now;
+        game.dt = dt;
         vec2 vel = {0,0};
         game.mouse_pos = GetMousePosition();
         if (IsKeyDown(KEY_A)) vel.x += -1;
@@ -276,49 +452,61 @@ int main(void) {
         while ((k = GetKeyPressed())) {
             if (k == KEY_SPACE) {
                 attack(&game, player, 0);
+            } else if (k == KEY_F) {
+                game_log(&game, "Welp!");
+            } else if (k == KEY_TAB) {
+                draw_logs = !draw_logs;
             }
         }
 
-        rect camera;
         camera.x = player->body.x + player->body.width/2 - (float)winw/2;
         camera.y = player->body.y + player->body.height/2 - (float)winh/2;
         camera.width = winw;
         camera.height= winh;
         BeginDrawing();
         ClearBackground(BLACK);
-        sort_entities_by_y(entities.data, entities.count);
-        for (int i = 0; i < entities.count; i++) {
-            draw_entity(entities.data[i], camera);
-            for (int i = 0; i < 100; i++) {
-                projectile p = game.projectiles[i];
-                if (p.active) {
-                    float range = p.range;
-                    float r = p.straight.radius;
-                    Color c = p.straight.color;
-                    double from_start = now - p.start;
-                    vec2 traveled = vec2scale(p.straight.direction,
-                            from_start*p.straight.speed);
-                    if (vec2len(traveled) >= p.range) {
-                        p.active = 0;
-                        continue;
-                    }
-                    vec2 pos = vec2add(p.straight.origin, traveled);
-                    pos = apply_camera(pos, camera);
-                    info("World Pos %f %f (%f) len %f.", pos.x, pos.y, from_start*p.straight.speed, range);
-                    DrawCircleV(pos, r, c);
-                }
+        sort_entities_by_y(game.entities.data, game.entities.count);
+        for (int i = 0; i < game.entities.count; i++) {
+            draw_entity(game.entities.data[i], camera);
+        }
+        for (int i = 0; i < 100; i++) {
+            element* e = &game.elements[i];
+            if (!e->active) continue;
+            element_handle(&game, e);
+            if (e->kind == element_projectile) {
+                projectile p = e->projectile;
+                float range = p.range;
+                float r = p.straight.radius;
+                Color c = p.straight.color;
+                /* double from_start = now - p.start;
+                   vec2 traveled = vec2scale(p.straight.direction,
+                   from_start*p.straight.speed);
+                   if (vec2len(traveled) >= p.range) {
+                   p.active = 0;
+                   continue;
+                   } */
+                vec2 pos = p.straight.position; // = vec2add(p.straight.origin, traveled);
+                pos = apply_camera(pos, camera);
+                DrawCircleV(pos, r, c);
+            } else {
+                panic("unknown elemen kind %d.", e->kind);
+            }
+        }
+        if (draw_logs) {
+            for (int i = game.log_count-1;
+                    i >= game.log_count-20 && i >= 0; i--) { // max 20
+                DrawText(game.logs[i], 0, 500 - 20*(game.log_count-i),20, WHITE);
             }
         }
         EndDrawing();
     }
-    for (int i = 0; i < entities.count; i++) {
-        UnloadTexture(entities.data[i]->image);
+    for (int i = 0; i < game.entities.count; i++) {
+        UnloadTexture(game.entities.data[i]->image);
     }
-    free(entities.data);
-    for (int i = 0; i < a.pages_count; i++) {
-        free(a.pages[i]);
-    }
-    free(a.pages);
-    entities.data = 0;
+    free(game.entities.data);
+    game.entities.data = 0;
+    arena_free(&a);
+    arena_free(&game.cycle_arena);
+    arena_free(&game.chat_arena);
     return 0;
 }

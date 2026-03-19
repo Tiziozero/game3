@@ -1,6 +1,6 @@
 SRC=main.c env.c
 all:
-	gcc -ggdb -o prog $(SRC) -lm -L./windows -lraylib
+	gcc -ggdb -o prog $(SRC) -lm -L. -lraylib
 	./prog
 win:
 	zig cc -o prog.exe $(SRC) -L. -lraylib
