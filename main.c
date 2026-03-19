@@ -1,8 +1,7 @@
 #include <iso646.h>
 #include <stdio.h>
-#include "defines.h"
 #include "raylib.h"
-#include "raymath.h"
+#include "defines.h"
 #include "utils.h"
 #include <stdlib.h>
 #include <time.h>
@@ -21,10 +20,10 @@ typedef Rectangle rect;
 int load_env(const char *filename);
 
 typedef enum {
-    attack_kind_none,
-    attack_kind_projectile,
+    ability_kind_none,
+    ability_kind_attack,
     attack_kind_arc,
-} atk_kind;
+} ability_kind;
 dec_dynarr(void);
 int dynarr_add(void* ptr, void* data) {
     dynarr_void* dynarr = ptr;
@@ -64,11 +63,11 @@ typedef struct {
     char active; // for game to see if it's still active
 } projectile;
 typedef struct {
-    atk_kind attack_kind;
+    ability_kind attack_kind;
     union {
         projectile projectile;
     };
-} entity_attack;
+} entity_ability;
 
 typedef struct {
     int id;
@@ -78,13 +77,17 @@ typedef struct {
     struct {
         rect source;
     } draw;
-    entity_attack attacks[4]; // 4 attacks
+    entity_ability abilities[4]; // 4 attacks
 } entity;
 dec_dynarr(entity);
 
 vec2 apply_camera(vec2 world_pos, rect camera) {
     return _vec(world_pos.x - camera.x,
         world_pos.y - camera.y);
+}
+vec2 unapply_camera(vec2 screen_pos, rect camera) {
+    return _vec(screen_pos.x + camera.x,
+                screen_pos.y + camera.y);
 }
 int draw_entity(entity* e, rect camera) {
     rect body = e->body;
@@ -207,9 +210,9 @@ game* getgame() {
 }
 
 int attack(game* g, entity* entity, int atk_index) {
-    entity_attack atk = entity->attacks[atk_index];
+    entity_ability atk = entity->abilities[atk_index];
     switch (atk.attack_kind) {
-        case attack_kind_projectile:
+        case ability_kind_attack:
             {
                 projectile prjk = atk.projectile;
                 switch (prjk.kind) {
@@ -368,6 +371,19 @@ bool line_rect_intersect(vec2 p1, vec2 p2, rect r) {
 
     return false;
 }
+int player_ability(int ability, game* game) {
+    if (ability == 0) {
+    } else if (ability == 1) {
+    } else if (ability == 2) {
+    } else if (ability == 3) {
+    } else if (ability == 4) {
+    } else if (ability == 5) {
+        attack(game, game->player, 0);
+    } else {
+        panic("unhandeled");
+    }
+    return 0;
+}
 // with updated position and prev
 int projectile_body_hit(projectile* p, rect body, vec2 prev_pos) {
     if (p->kind == projectile_straight) {
@@ -398,10 +414,11 @@ int main(void) {
 
     game.entities = _entities;
     // take reference to player
-    entity* player = entities_new_entity(&a, &game.entities, 150.0f,getenv("PLAYER_PATH"));
+    entity* player = entities_new_entity(&a, &game.entities, 80.0f,getenv("PLAYER_PATH"));
     player_id = player->id;
-    entity_attack* pa1 = &player->attacks[0];
-    pa1->attack_kind = attack_kind_projectile;
+    game.player = player;
+    entity_ability* pa1 = &player->abilities[0];
+    pa1->attack_kind = ability_kind_attack;
     pa1->projectile.kind=projectile_straight;
     pa1->projectile.damage=1.2*player->atk;
     pa1->projectile.range=400;
@@ -410,13 +427,13 @@ int main(void) {
     pa1->projectile.straight.radius=2; // radius of 2;
     pa1->projectile.straight.speed= 1000;
     printf("Player :%s\n", getenv("PLAYER_PATH"));
-    entity* enemy = entities_new_entity(&a, &game.entities, 120.0f,getenv("ENEMY1"));
+    entity* enemy = entities_new_entity(&a, &game.entities, 90.0f,getenv("ENEMY1"));
     enemy->body.x = 200;
     enemy->body.y = 200;
-    enemy = entities_new_entity(&a, &game.entities, 120.0f,getenv("ENEMY2"));
+    enemy = entities_new_entity(&a, &game.entities, 95.0f,getenv("ENEMY2"));
     enemy->body.x = -100;
     enemy->body.y = 150;
-    enemy = entities_new_entity(&a, &game.entities, 120.0f,getenv("ENEMY3"));
+    enemy = entities_new_entity(&a, &game.entities, 100.0f,getenv("ENEMY3"));
     enemy->body.x = -100;
     enemy->body.y = -350;
     game.log_cap = 10;
@@ -431,23 +448,23 @@ int main(void) {
     double last = get_time();
     rect camera;
     game.camera= &camera;
+    vec2  player_dest;
     while (!WindowShouldClose()) {
         // dt
         double now = get_time();
         double dt = now - last;
         last = now;
         game.dt = dt;
-        vec2 vel = {0,0};
         game.mouse_pos = GetMousePosition();
-        if (IsKeyDown(KEY_A)) vel.x += -1;
-        if (IsKeyDown(KEY_D)) vel.x += 1;
-        if (IsKeyDown(KEY_W)) vel.y += -1;
-        if (IsKeyDown(KEY_S)) vel.y += 1;
-        vel = Vector2Normalize(vel);
-        vel.x *= 200.0f*(float)dt;
-        vel.y *= 200.0f*(float)dt;
-        player->body.x += vel.x;
-        player->body.y += vel.y;
+        if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT)) {
+            player_dest = unapply_camera(game.mouse_pos, *game.camera);
+            /* velocity, not ideal
+             * vec2 dest = vec2scale(vec2norm(vec2sub(game.mouse_pos,
+                        _vec((float)winw/2, (float)winh/2))), 200.0f*(float)dt);
+            player->body.x += dest.x;
+            player->body.y += dest.y;
+            printf("Vec2 %f %f\n", dest.x, dest.y); */
+        }
         int k = 0;
         while ((k = GetKeyPressed())) {
             if (k == KEY_SPACE) {
@@ -456,8 +473,20 @@ int main(void) {
                 game_log(&game, "Welp!");
             } else if (k == KEY_TAB) {
                 draw_logs = !draw_logs;
+            } else if (k == KEY_Q) {
+                player_ability(0, &game);
+            } else if (k == KEY_W) {
+                player_ability(1, &game);
+            } else if (k == KEY_E) {
+                player_ability(2, &game);
+            } else if (k == KEY_R) {
+                player_ability(3, &game);
+            } else if (k == KEY_D) {
+                player_ability(4, &game);
             }
         }
+        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) // left clicownk
+            player_ability(5, &game);
 
         camera.x = player->body.x + player->body.width/2 - (float)winw/2;
         camera.y = player->body.y + player->body.height/2 - (float)winh/2;

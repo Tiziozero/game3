@@ -1,5 +1,6 @@
 #ifndef DEFINES_H
 #define DEFINES_H
+#include "raymath.h"
 #define vec2zero()               Vector2Zero()
 #define vec2one()                Vector2One()
 #define vec2add(a, b)            Vector2Add(a, b)
