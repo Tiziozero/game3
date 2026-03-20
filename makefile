@@ -1,6 +1,10 @@
 SRC=main.c env.c
+INCLIDES=
+INCLUDES += -Iexternal/lua
+LIBS=-L. -lraylib
+LIBS += external/lua/liblua.a -ldl -lm
 all:
-	gcc -ggdb -o prog $(SRC) -lm -L. -lraylib
+	gcc -ggdb -o prog $(SRC) $(INCLUDES) $(LIBS)
 	./prog
 win:
 	zig cc -o prog.exe $(SRC) -L. -lraylib

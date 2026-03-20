@@ -6,9 +6,11 @@
 #include <stdlib.h>
 #include <time.h>
 #include <unistd.h>
+#include "external/lua/lua.h"
+#include "external/lua/lauxlib.h"
+#include "external/lua/lualib.h"
 
 int player_id;
-
 
 #define cellw 3*16
 #define cellh 3*16
@@ -25,12 +27,6 @@ typedef Rectangle rect;
 
 int load_env(const char *filename);
 
-typedef enum {
-    ability_kind_none,
-    ability_kind_straight_projectile,
-    ability_kind_dash,
-    attack_kind_arc,
-} ability_kind;
 dec_dynarr(void);
 int dynarr_add(void* ptr, void* data) {
     dynarr_void* dynarr = ptr;
@@ -70,14 +66,8 @@ typedef struct {
     char active; // for game to see if it's still active
 } projectile;
 typedef struct {
-    ability_kind ability_kind;
-    union {
-        projectile projectile;
-        struct {
-            float velocity, range;
-        } dash;
-    };
-} entity_ability;
+    int ref;
+} item;
 
 typedef enum {
     status_on = 1,
@@ -93,7 +83,7 @@ typedef struct {
     struct {
         rect source;
     } draw;
-    entity_ability abilities[4]; // 4 attacks
+    item abilities[4]; // 4 attacks
 } entity;
 dec_dynarr(entity);
 
@@ -270,9 +260,37 @@ game* getgame() {
     return _getsetgame(0, 0);
 }
 
+entity* find_entity(game* g, int id) {
+    for (int i=0;i<g->entities.count;i++)
+        if (g->entities.data[i]->id == id)
+            return g->entities.data[i];
+    return NULL;
+}
+float damage_target(float total_atk,entity* e) {
+    e->health -= total_atk;
+    if (e->health <= 0) {
+        e->health = 0;
+        e->status = status_die;
+    }
+    dbg("AFTER %f", e->health);
+    return e->health;
+}
+int l_damage_entity(lua_State* L)
+{
+    int id = luaL_checkinteger(L, 1);
+    float dmg = luaL_checknumber(L, 2);
+
+    game* g = getgame();
+    entity* e = find_entity(g, id);
+
+    if (!e) return 0;
+
+    damage_target(dmg, e);
+    return 0;
+}
 int attack(game* g, entity* entity, int atk_index) {
-    entity_ability atk = entity->abilities[atk_index];
-    switch (atk.ability_kind) {
+    item atk = entity->abilities[atk_index];
+    /* switch (atk.ability_kind) {
         case ability_kind_straight_projectile:
             {
                 projectile prjk = atk.projectile;
@@ -308,7 +326,7 @@ int attack(game* g, entity* entity, int atk_index) {
                 }
             } break;
         default: panic("unhandeled");
-    }
+    }*/
     return 1;
 }
 bool entities_overlap(entity** entities, int count, int* out_a, int* out_b) {
@@ -339,14 +357,12 @@ float point_rect_dist(vec2 p, rect r) {
     return sqrtf(dx*dx + dy*dy);
 }
 int projectile_body_hit(projectile* p, rect body, vec2 prev_pos);
-float damage_target(float total_atk,entity* e) {
-    e->health -= total_atk;
-    if (e->health <= 0) {
-        e->health = 0;
-        e->status = status_die;
-    }
-    dbg("AFTER %f", e->health);
-    return e->health;
+int l_projectile_body_hit(lua_State*L) {
+    float x1 = luaL_checknumber(L, 1);
+    float y1 = luaL_checknumber(L, 2);
+    float x2 = luaL_checknumber(L, 3);
+    float y2 = luaL_checknumber(L, 4);
+    game* game = getgame();
 }
 int element_handle(game* g, element* e) {
     if (e->kind == element_projectile) {
@@ -492,6 +508,36 @@ struct map {
     int rows,cols;
 };
 int main(void) {
+
+    lua_State *L = luaL_newstate();
+    luaL_openlibs(L);
+    lua_State* GL;
+    lua_newtable(GL);
+
+    lua_pushcfunction(GL, l_damage_entity);
+    lua_setfield(GL, -2, "damage");
+
+    // int projectile_body_hit(projectile* p, rect body, vec2 prev_pos);
+    lua_pushcfunction(GL, l_projectile_body_hit);
+    lua_setfield(GL, -2, "find_circle");
+
+    lua_setglobal(GL, "engine");
+
+    // Execute a script file
+    if (luaL_dofile(L, "hit.lua") != LUA_OK) {
+        printf("Lua error: %s\n", lua_tostring(L, -1));
+    }
+
+    // Call a Lua function
+    lua_getglobal(L, "onHit");
+    lua_pushnumber(L, 42);
+    lua_pcall(L, 1, 0, 0);
+
+    luaL_dofile(L, "scripts/firebolt.lua");
+
+    /* stack: returned table */
+    int ref = luaL_ref(L, LUA_REGISTRYINDEX);
+
     load_env(".env");
     printf("Hello World!\n");
     InitWindow(winw, winh, "Hello Raylib");
@@ -528,17 +574,9 @@ int main(void) {
     player->atk = 50;
     player->health = 230;
     player->max_health = 230;
-    entity_ability* pa1 = &player->abilities[0];
-    pa1->ability_kind = ability_kind_straight_projectile;
-    pa1->projectile.kind=projectile_straight;
-    pa1->projectile.damage=1.2*player->atk;
-    pa1->projectile.range=400;
-    pa1->projectile.straight.area=0; // one enemy
-    pa1->projectile.straight.color = RED;
-    pa1->projectile.straight.radius=2; // radius of 2;
-    pa1->projectile.straight.speed= 1000;
-    entity_ability* pa2 = &player->abilities[1];
-    pa2->ability_kind = ability_kind_dash;
+    item* pa1 = &player->abilities[0];
+    pa1->ref = ref;
+    item* pa2 = &player->abilities[1];
     printf("Player :%s\n", getenv("PLAYER_PATH"));
     entity* enemy = entities_new_entity(&a, &game.entities,
             90.0f,getenv("ENEMY1"));
@@ -713,5 +751,6 @@ int main(void) {
     arena_free(&game.cycle_arena);
     arena_free(&game.chat_arena);
     free(map.tiles);
+    lua_close(L);
     return 0;
 }
