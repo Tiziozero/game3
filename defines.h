@@ -33,10 +33,10 @@
 #define vec2eq(a, b)             Vector2Equals(a, b)
 #define vec2refract(v, n, r)     Vector2Refract(v, n, r)
 
-#define _rect(a, b, c, d) (rect){a,b,c,d}
-#define _vec(a, b) (vec2){a,b}
-#define rect_pos(r) _vec(r.x, r.y)
-#define rect_size(r) _vec(r.width, r.height)
+#define _rect(a, b, c, d) (rect){(a),(b),(c),(d)}
+#define _vec(a, b) (vec2){(a),(b)}
+#define rect_pos(r) _vec((r).x, (r).y)
+#define rect_size(r) _vec((r).width, (r).height)
 #define dec_dynarr(t) typedef struct { t** data; int count; \
                         int cap; int size; } dynarr_##t;
 #define new_dynarr(t, name) dynarr_##t name = {}; name.count = 0; \
