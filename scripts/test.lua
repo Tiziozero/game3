@@ -34,8 +34,8 @@ function M.act(self)
         r = radius,
         dx = dx,
         dy = dy,
-        speed = 500,
-        range = 150,
+        speed = 800,
+        range = 800,
         dmg = self.base_damage,
         projectile_path = "scripts/projectiles/test.lua"
     }

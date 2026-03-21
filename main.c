@@ -225,6 +225,7 @@ float damage_target(float total_atk,entity* e) {
     if (e->health <= 0) {
         e->health = 0;
         e->status = status_die;
+        dbg("entity %d dead", e->handle);
     }
     dbg("AFTER %f", e->health);
     return e->health;
@@ -282,7 +283,7 @@ int l_projectile_body_hit(lua_State*L) {
 int element_update(game* g, element* e) {
      if (!e->active) return 0;
      lua_State* L = g->L;
-     dbg("xy %f %f", e->pos.x, e->pos.y);
+     // dbg("xy %f %f", e->pos.x, e->pos.y);
     if (!get_lua_script_function(L, e->ref, "update")) {
         panic("Failed to oget act.");
         return 0;
@@ -864,35 +865,41 @@ int l_engine_get_entities_line_intersect(lua_State* L) {
     double y2 = luaL_checknumber(L, 5);
     double r = luaL_checknumber(L, 6);
 
-    int j = 1;
-    lua_newtable(L);  // create table on stack
+    lua_newtable(L);  // top of stack: results table
+    int lua_index = 1;
+
     for (int i = 0; i < getgame()->entities.count; i++) {
         entity* e = getgame()->entities.data[i];
+        if (!e) continue;
 
-        // quick bounding box check
+        // bounding box check
         if (e->body.x + e->body.width < fmaxf(x1,x2) ||
                 e->body.x > fminf(x1,x2) ||
                 e->body.y + e->body.height < fmaxf(y1,y2) ||
                 e->body.y > fminf(y1,y2))
-        {
-            continue; // skip, no overlap
-        }
+            continue;
 
-        float f;
-        if (projectile_body_hit(handle, _vec(x1,y1), r, e->body,
-                    _vec(x2,y2), &f)) {
-            // push {handle: <>, distance:<>}
+        float dist;
+        if (projectile_body_hit(handle, _vec(x1, y1),
+                    r, e->body, _vec(x2, y2), &dist)) {
+            // create table for this hit
             lua_newtable(L);                  // stack: results, hit_table
             lua_pushinteger(L, e->handle);
             lua_setfield(L, -2, "handle");    // hit_table.handle = e->handle
-            lua_pushnumber(L, f); // distance
+            lua_pushnumber(L, dist);
             lua_setfield(L, -2, "distance");  // hit_table.distance = dist
 
             // insert hit_table into results array
-            lua_rawseti(L, -2, j++);
+            lua_rawseti(L, -2, lua_index++);
         }
     }
     return 1;
+}
+int l_engine_entity_damage(lua_State* L) {
+    int handle = luaL_checknumber(L, 1);
+    double damage = luaL_checknumber(L, 2);
+    damage_target(damage, find_entity(getgame(),handle));
+    return 0;
 }
 void register_engine(lua_State* L) {
     lua_newtable(L); // engine
@@ -941,6 +948,8 @@ void register_engine(lua_State* L) {
 
     lua_pushcfunction(L, l_engine_get_entities_line_intersect);
     lua_setfield(L, -2, "entities_line_intersect");
+    lua_pushcfunction(L, l_engine_entity_damage);
+    lua_setfield(L, -2, "entity_damage");
 
     lua_setglobal(L, "engine");
 }

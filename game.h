@@ -173,6 +173,7 @@ int l_engine_move_entity(lua_State* L);
 int l_engine_entity_distance(lua_State* L);
 int l_engine_get_dt(lua_State* L);
 int l_engine_get_mouse_pos_world(lua_State* L);
+int l_engine_entity_damage(lua_State* L);
 
 int script_init(lua_State* L, int script_ref, int owner_handle);
 int l_engine_new_projectile(lua_State* L);
