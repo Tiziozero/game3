@@ -1,3 +1,3 @@
-function onHit()
-    print("Hit")
+function hello()
+    print("hello!")
 end
