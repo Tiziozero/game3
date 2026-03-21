@@ -1,5 +1,7 @@
 local M = {}
 
+local utils = require("utils")
+
 function M.init(self, owner, ref)
     print("INIT CALLED")
     -- set base stats
@@ -13,25 +15,27 @@ function M.init(self, owner, ref)
 end
 
 function M.act(self)
-    print("act CALLED")
     if self.handle == 0 or not self.handle then
         print("no handle")
         return
     end
-    print("handle", self.handle)
     local owner = engine.get_entity(self.handle);
     local x, y = engine.get_mouse_pos_world();
     local dx = x - owner.centerx;
     local dy = y - owner.centery;
-    print("dx dy", dx, dy, self.base_damage, self.range, self.handle)
+    --[[ print("x y dx dy ownerx y centerx y", x, y, dx, dy,
+    owner.x, owner.y, owner.centerx, owner.centery,
+    self.base_damage, self.range, self.handle)]]
+    local radius = 10;
     local p = {
         owner = self.handle,
-        x = owner.x,
-        y = owner.y,
+        x = owner.centerx,
+        y = owner.centery,
+        r = radius,
         dx = dx,
         dy = dy,
-        speed = 800,
-        range = self.range,
+        speed = 500,
+        range = 150,
         dmg = self.base_damage,
         projectile_path = "scripts/projectiles/test.lua"
     }

@@ -9,30 +9,14 @@
 #include "external/lua/lua.h"
 #include "external/lua/lauxlib.h"
 #include "external/lua/lualib.h"
-#define MAX_ELEMENTS 100
-#define MAX_ABILITIES 10
+#include "game.h"
 Texture2D textures[256];
 int t_index = 0;;
-int player_handle;
 // /home/kleidi/.tmp/Konachan.com - 346965 sample.adadjpg.jpg
 
-#define cellw 3*16
-#define cellh 3*16
-#define srccellw 16
-#define srccellh 16
-void dbg_table(lua_State* L, int index);
-
-#define winh 750
-#define winw 1200
-typedef Vector2 vec2;
-typedef Rectangle rect;
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
+int projectile_body_hit(int entity, vec2 p, float r, rect body, vec2 prev_pos, float* dist);
 int load_env(const char *filename);
 
-dec_dynarr(void);
 int dynarr_add(void* ptr, void* data) {
     dynarr_void* dynarr = ptr;
     if (dynarr->count >= dynarr->cap) {
@@ -47,27 +31,6 @@ int dynarr_add(void* ptr, void* data) {
     TODO("Finish");
 }
 
-typedef struct {
-    int ref, instance;
-} item;
-
-typedef enum {
-    status_on = 1,
-    status_die, // when dying
-    status_dead = 0,
-}entity_status;
-typedef struct {
-    entity_status status;
-    int handle;
-    Texture2D image;
-    rect body; // pos/destination
-    double atk, def, health, max_health; // def:multuplier for damage
-    struct {
-        rect source;
-    } draw;
-    item abilities[MAX_ELEMENTS];
-} entity;
-dec_dynarr(entity);
 
 vec2 apply_camera(vec2 world_pos, rect camera) {
     return _vec(world_pos.x - camera.x,
@@ -160,52 +123,8 @@ entity* entities_remove_entity(dynarr_entity* entities, int index) {
 
     return removed;
 }
-typedef struct {
-    int active, handle, instance_ref, ref;
-    uint16_t generation;   // increments every reuse
-} element; // like projectiles and what not
-dec_dynarr(element);
     // Map: script path -> LUA_REF
-typedef struct {
-    char* path;
-    int ref; // luaL_ref to the loaded chunk/table
-} script_entry;
-typedef struct {
-    dynarr_entity entities;
-    vec2 mouse_pos;
-    entity* player; // player
-    element elements[MAX_ELEMENTS];
-    int energy;
-    int eps; // energy recovered per second.
-
-    Arena cycle_arena; // arena that gets reset every cycle for temporary stuff
-
-    Arena chat_arena; // arena for messages etc
-    char** logs; // circular buffer
-    int log_count; // at which to start
-    int log_cap; // at which to start
-
-    double dt;
-    
-    rect* camera;
-
-    script_entry loaded_scripts[128]; // or dynamic map
-    int loaded_count;
-    lua_State* L;
-} game;
 int get_lua_script_function(lua_State* L, int script_ref, const char* func_name);
-entity* find_entity(game* g, int handle);
-static inline int make_handle(int index, uint16_t gen) {
-    return (gen << 16) | index;
-}
-
-static inline int handle_index(int handle) {
-    return handle & 0xFFFF;
-}
-
-static inline uint16_t handle_gen(int handle) {
-    return (handle >> 16) & 0xFFFF;
-}
 element* get_element(game* g, int handle) {
 
     int idx = handle_index(handle);
@@ -323,10 +242,6 @@ int l_damage_entity(lua_State* L)
     damage_target(dmg, e);
     return 0;
 }
-int attack(game* g, entity* entity, int atk_index) {
-    item atk = entity->abilities[atk_index];
-    return 1;
-}
 bool entities_overlap(entity** entities, int count, int* out_a, int* out_b) {
     for (int i = 0; i < count; i++) {
         for (int j = i + 1; j < count; j++) {
@@ -354,7 +269,6 @@ float point_rect_dist(vec2 p, rect r) {
     
     return sqrtf(dx*dx + dy*dy);
 }
-int projectile_body_hit(vec2 p, float r,  rect body, vec2 prev_pos);
 int l_projectile_body_hit(lua_State*L) {
     float x1 = luaL_checknumber(L, 1);
     float y1 = luaL_checknumber(L, 2);
@@ -368,7 +282,7 @@ int l_projectile_body_hit(lua_State*L) {
 int element_update(game* g, element* e) {
      if (!e->active) return 0;
      lua_State* L = g->L;
-     info("Calling update.");
+     dbg("xy %f %f", e->pos.x, e->pos.y);
     if (!get_lua_script_function(L, e->ref, "update")) {
         panic("Failed to oget act.");
         return 0;
@@ -392,8 +306,29 @@ int element_update(game* g, element* e) {
 
 }
 int element_draw(game* g, element* e) {
-    // warn("Handle");
+     if (!e->active) return 0;
+     lua_State* L = g->L;
+    if (!get_lua_script_function(L, e->ref, "draw")) {
+        panic("Failed to oget act.");
+        return 0;
+    }
+
+    // 3. push the instance table as self
+    lua_rawgeti(L, LUA_REGISTRYINDEX, e->instance_ref); // stack: script, act, self
+
+    // 4. call act(self)
+    if (lua_pcall(L, 1, 0, 0) != LUA_OK) { // 1 arg = self
+        printf("Lua act error: %s\n", lua_tostring(L, -1));
+        lua_pop(L, 1); // pop error
+        lua_pop(L, 1); // pop script table
+        return 0;
+    }
+
+    // 5. clean up: pop script table
+    lua_pop(L, 1);
+
     return 1;
+
 }
 bool point_in_rect(vec2 p, rect r) {
     return p.x >= r.x && p.x <= r.x + r.width &&
@@ -442,7 +377,7 @@ bool line_rect_intersect(vec2 p1, vec2 p2, rect r) {
     return false;
 }
 int ability_act(lua_State* L, int script_ref, int instance_ref);
-int player_ability(game* game, int handle, int ability) {
+int entity_ability(game* game, int handle, int ability) {
     entity* e = find_entity(game, handle);
     if (!e) {
         panic("No entity.");
@@ -450,6 +385,10 @@ int player_ability(game* game, int handle, int ability) {
     }
     if (ability >= 0 && ability < MAX_ABILITIES) {
         dbg("entity ability %d", ability);
+        if (!e->abilities[ability].active) {
+            err("No ability");
+            return 0;
+        }
         if (!ability_act(game->L, e->abilities[ability].ref, e->abilities[ability].instance)) {
             panic("Failed to act ability. %d", e->abilities[ability].instance);
             return 0;
@@ -459,26 +398,55 @@ int player_ability(game* game, int handle, int ability) {
     }
     return 1;
 }
+float point_segment_dist(vec2 p, vec2 a, vec2 b) {
+    vec2 ab = { b.x - a.x, b.y - a.y };
+    vec2 ap = { p.x - a.x, p.y - a.y };
+    float t = (ap.x*ab.x + ap.y*ab.y) / (ab.x*ab.x + ab.y*ab.y);
+    t = fmaxf(0.0f, fminf(1.0f, t));  // clamp to segment
+    vec2 closest = { a.x + t*ab.x, a.y + t*ab.y };
+    float dx = p.x - closest.x, dy = p.y - closest.y;
+    return sqrtf(dx*dx + dy*dy);
+}
+float line_segment_shortest_dist(vec2 a, vec2 b, vec2 c, vec2 d) {
+    // Shortest dist between segment AB and segment CD
+    // = min of all four point-to-segment distances
+    //   (if segments don't intersect, which here they don't since we already checked)
+    float d1 = point_segment_dist(a, c, d);
+    float d2 = point_segment_dist(b, c, d);
+    float d3 = point_segment_dist(c, a, b);
+    float d4 = point_segment_dist(d, a, b);
+    return fminf(fminf(d1, d2), fminf(d3, d4));
+}
+
+float line_rect_shortest_dist(vec2 p1, vec2 p2, rect body) {
+    vec2 tl = { body.x,              body.y               };
+    vec2 tr = { body.x + body.width, body.y               };
+    vec2 bl = { body.x,              body.y + body.height };
+    vec2 br = { body.x + body.width, body.y + body.height };
+
+    float d0 = line_segment_shortest_dist(p1, p2, tl, tr); // top
+    float d1 = line_segment_shortest_dist(p1, p2, bl, br); // bottom
+    float d2 = line_segment_shortest_dist(p1, p2, tl, bl); // left
+    float d3 = line_segment_shortest_dist(p1, p2, tr, br); // right
+    return fminf(fminf(d0, d1), fminf(d2, d3));
+}
 // with updated position and prev
-int projectile_body_hit(vec2 p, float r, rect body, vec2 prev_pos) {
+int projectile_body_hit(int entity, vec2 p, float r, rect body, vec2 prev_pos, float* out_dist) {
+
     if (circle_rect_intersect(p, r, body)) {
         // projectile directly hits body
+        if (out_dist) *out_dist = 0.0f; // inside/touching, distance is 0
+        return 1;
         return 1;
     }
     if (line_rect_intersect(p, prev_pos, body)) {
         // projectile has interescted body some time in change in pos
+        if (out_dist) *out_dist = line_rect_shortest_dist(p, prev_pos, body);
+        return 1;
         return 1;
     }
     return 0; // else no intersection
 }
-typedef struct {
-    int n;
-} tile;
-typedef struct map map;
-struct map {
-    tile* tiles;
-    int rows,cols;
-};
 
 static entity* check_entity_handle(lua_State* L, int index) {
     int handle = luaL_checkinteger(L, index);
@@ -607,7 +575,7 @@ int l_engine_get_dt(lua_State* L)
         return 1;
     }
 
-    lua_pushnumber(L, g->dt);
+    lua_pushnumber(L,g->dt);
     return 1;
 }
 int l_engine_get_mouse_pos_world(lua_State* L)
@@ -641,6 +609,9 @@ int l_engine_new_projectile(lua_State* L) {
     lua_getfield(L, 1, "y");
     float y = luaL_optnumber(L, -1, 0.0f);
     lua_pop(L, 1);
+    lua_getfield(L, 1, "r");
+    float r = luaL_optnumber(L, -1, 0.0f);
+    lua_pop(L, 1);
     lua_getfield(L, 1, "dx");
     float dx = luaL_optnumber(L, -1, 0.0f);
     lua_pop(L, 1);
@@ -650,6 +621,11 @@ int l_engine_new_projectile(lua_State* L) {
     lua_getfield(L, 1, "speed");
     float speed = luaL_optnumber(L, -1, 0.0f);
     lua_pop(L, 1);
+
+    lua_getfield(L, 1, "range");
+    float range = luaL_optnumber(L, -1, 0.0f);
+    lua_pop(L, 1);
+
     lua_getfield(L, 1, "owner");
     int owner_handle = luaL_optinteger(L, -1, 0);
     lua_pop(L, 1);
@@ -686,24 +662,33 @@ int l_engine_new_projectile(lua_State* L) {
         panic("No self ref.");
         return 0;
     }
-
     int element_handle = game_spawn_element(g, script_ref, self_ref);
     if (!element_handle) {
         panic("Failed to create element.");
         return 0;
     }
-    if (!get_lua_script_function(L,script_ref, "set_handle")) {
-        panic("Failed to get set handle.");
+    // call init_projectile
+    if (!get_lua_script_function(L, script_ref, "init_projectile")) {
+        panic("script has no init_projectile function.");
         return 0;
     }
-
-    dbg("setting handle.");
+    // push self, x, y, r, handle
     lua_rawgeti(L, LUA_REGISTRYINDEX, self_ref); // stack: script
-    lua_pushinteger(L,element_handle);
-    if (lua_pcall(L, 2, 0, 0) != LUA_OK) {
-        printf("failed to set handle: %s\n", lua_tostring(L, -1));
+    lua_pushnumber(L, x);
+    lua_pushnumber(L, y);
+    lua_pushnumber(L, dir.x);
+    lua_pushnumber(L, dir.y);
+    lua_pushnumber(L, speed);
+    lua_pushnumber(L, r);
+    lua_pushnumber(L, range);
+    lua_pushinteger(L,element_handle); // 9 args
+
+    if (lua_pcall(L, 9, 0, 0) != LUA_OK) {
+        panic("failed to set handle: %s", lua_tostring(L, -1));
         lua_pop(L, 1);
+        
     }
+    info("called init prijectile.");
 
     // return the same table back to Lua for convenience
     lua_pushvalue(L, 1);
@@ -834,13 +819,80 @@ int l_engine_remove_element(lua_State* L) {
     int handle = luaL_checkinteger(L, 1);
 
     remove_element(g, handle);
-    info("REMOVED ELEMENT.");
+    dbg("REMOVED ELEMENT.");
 
     return 0;
 }
 int l_engine_panic(lua_State* L) {
     panic("0");
     return 0;
+}
+int l_engine_element_set_xy(lua_State* L) {
+    int handle = luaL_checkinteger(L, 1);
+    float x = luaL_checknumber(L, 2);
+    float y = luaL_checknumber(L, 3);
+
+    element* e = get_element(getgame(), handle);
+    if (!e) return luaL_error(L, "invalid element handle");
+
+    e->pos.x = x;
+    e->pos.y = y;
+
+    return 0;
+}
+
+int l_engine_element_get_xy(lua_State* L) {
+    int handle = luaL_checkinteger(L, 1);
+
+    
+    element* e = get_element(getgame(), handle);
+    if (!e) {
+        lua_pushnil(L);
+        lua_pushnil(L);
+        return 2;
+    }
+
+    lua_pushnumber(L, e->pos.x);
+    lua_pushnumber(L, e->pos.y);
+    return 2;
+}
+int l_engine_get_entities_line_intersect(lua_State* L) {
+    int handle = luaL_checknumber(L, 1);
+    double x1 = luaL_checknumber(L, 2);
+    double y1 = luaL_checknumber(L, 3);
+    double x2 = luaL_checknumber(L, 4);
+    double y2 = luaL_checknumber(L, 5);
+    double r = luaL_checknumber(L, 6);
+
+    int j = 1;
+    lua_newtable(L);  // create table on stack
+    for (int i = 0; i < getgame()->entities.count; i++) {
+        entity* e = getgame()->entities.data[i];
+
+        // quick bounding box check
+        if (e->body.x + e->body.width < fmaxf(x1,x2) ||
+                e->body.x > fminf(x1,x2) ||
+                e->body.y + e->body.height < fmaxf(y1,y2) ||
+                e->body.y > fminf(y1,y2))
+        {
+            continue; // skip, no overlap
+        }
+
+        float f;
+        if (projectile_body_hit(handle, _vec(x1,y1), r, e->body,
+                    _vec(x2,y2), &f)) {
+            // push {handle: <>, distance:<>}
+            lua_newtable(L);                  // stack: results, hit_table
+            lua_pushinteger(L, e->handle);
+            lua_setfield(L, -2, "handle");    // hit_table.handle = e->handle
+            lua_pushnumber(L, f); // distance
+            lua_setfield(L, -2, "distance");  // hit_table.distance = dist
+
+            // insert hit_table into results array
+            lua_rawseti(L, -2, j++);
+        }
+    }
+    return 1;
 }
 void register_engine(lua_State* L) {
     lua_newtable(L); // engine
@@ -877,6 +929,18 @@ void register_engine(lua_State* L) {
 
     lua_pushcfunction(L, l_engine_panic);
     lua_setfield(L, -2, "panic");
+
+    lua_pushcfunction(L, l_engine_draw_circle);
+    lua_setfield(L, -2, "draw_circle");
+
+    lua_pushcfunction(L, l_engine_element_get_xy);
+    lua_setfield(L, -2, "element_get_xy");
+
+    lua_pushcfunction(L, l_engine_element_set_xy);
+    lua_setfield(L, -2, "element_set_xy");
+
+    lua_pushcfunction(L, l_engine_get_entities_line_intersect);
+    lua_setfield(L, -2, "entities_line_intersect");
 
     lua_setglobal(L, "engine");
 }
@@ -1041,7 +1105,7 @@ int game_get_or_load_script(game* game, const char* path){
     // Push the script table back onto the stack for convenience
     lua_rawgeti(game->L, LUA_REGISTRYINDEX, ref);
 
-    info("New Script Ref %d.", ref);
+    dbg("New Script Ref %d.", ref);
     return ref;
 }
 
@@ -1066,6 +1130,7 @@ int init_ability(game* game, int entity_handle, int ability, char* script) {
         return 0;
     }
     item i;
+    i.active = 1;
     int instance = script_init(game->L, ref, entity_handle);
     if (!instance) {
         panic("No instance.");
@@ -1114,13 +1179,14 @@ int main(void) {
     // take reference to player
     entity* player = entities_new_entity(&a, &game.entities,
             80.0f,getenv("PLAYER_PATH"));
-    player_handle = player->handle;
-    if (player_handle == 0) { panic("0");}
+    // player_handle = player->handle;
+    if (player == 0) { panic("0");}
     game.player = player;
+    game.player_handle = player->handle;
     player->atk = 50;
     player->health = 230;
     player->max_health = 230;
-    init_ability(&game, player_handle,0, "scripts/test.lua");
+    init_ability(&game, game.player_handle,0, "scripts/test.lua");
     printf("Player :%s\n", getenv("PLAYER_PATH"));
     entity* enemy = entities_new_entity(&a, &game.entities,
             90.0f,getenv("ENEMY1"));
@@ -1151,7 +1217,7 @@ int main(void) {
     int range_v = (int)winh/(cellh)/2+2;
     int range_h = (int)winw/(cellw)/2+2;
 
-    info("Player index %d.", player_handle);
+    dbg("Player index %d.", game.player_handle);
     int draw_logs = 1;
     game.dt = 0;
     double last = get_time();
@@ -1188,27 +1254,26 @@ int main(void) {
         int k = 0;
         while ((k = GetKeyPressed())) {
             if (k == KEY_SPACE) {
-                attack(&game, player, 0);
             } else if (k == KEY_F) {
                 game_log(&game, "Welp!");
             } else if (k == KEY_TAB) {
                 draw_logs = !draw_logs;
             } else if (k == KEY_Q) {
-                player_ability(&game, player_handle, 0);
+                entity_ability(&game, game.player_handle, 0);
             } else if (k == KEY_W) {
-                player_ability(&game, player_handle, 1);
+                entity_ability(&game, game.player_handle, 1);
             } else if (k == KEY_E) {
-                player_ability(&game, player_handle, 2);
+                entity_ability(&game, game.player_handle, 2);
             } else if (k == KEY_R) {
-                player_ability(&game, player_handle, 3);
+                entity_ability(&game, game.player_handle, 3);
             } else if (k == KEY_D) {
-                player_ability(&game, player_handle, 4);
+                entity_ability(&game, game.player_handle, 4);
             } else if (k == KEY_X) {
                 CloseWindow();
             }
         }
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {// left click
-            player_ability(&game, player_handle, 0);
+            entity_ability(&game, game.player_handle, 0);
         }
 
         camera.x = player->body.x + player->body.width/2 - (float)winw/2;
@@ -1272,6 +1337,10 @@ int main(void) {
     for (int i = 0; i < game.entities.count; i++) {
         UnloadTexture(game.entities.data[i]->image);
     }
+    for (int i = 0; i < game.loaded_count; i++) {
+        free(game.loaded_scripts[i].path);
+    }
+    free(game.logs);
     free(game.entities.data);
     game.entities.data = 0;
     arena_free(&a);
