@@ -8,10 +8,13 @@ function M.init(self, owner, ref)
     self.handle = owner;
     self.ref = ref; -- to self
     print("owner handle ref:", owner, ref);
-    self.base_damage = 80;
+    self.base_damage = 240;
     self.range = 800;
-    self.name = "test ability"
-    self.desc = "test ability does a whole bunch of stuff to figure out ho to do things"
+    self.name = "BigBoy"
+    self.desc = "Same is the guy that hit Japan. Now in orange!"
+    self.icon = "imgs/icon6.png"
+    self.cooldown_time = 10;
+    self.cooldown = 0.0;
 end
 
 function M.act(self)
@@ -19,6 +22,14 @@ function M.act(self)
         print("no handle")
         return
     end
+    --
+    if self.cooldown ~= 0 then
+        print("cooldown", self.cooldown)
+        return 0;
+    end
+    self.cooldown = self.cooldown_time;
+    print("cooldown_time", self.cooldown_time);
+
     local owner = engine.get_entity(self.handle);
     local x, y = engine.get_mouse_pos_world();
     local dx = x - owner.centerx;
@@ -31,15 +42,23 @@ function M.act(self)
         owner = self.handle,
         x = owner.centerx,
         y = owner.centery,
-        r = radius,
+        r = 30,
         dx = dx,
         dy = dy,
-        speed = 800,
-        range = 800,
+        speed = 200,
+        range = 300,
         dmg = self.base_damage,
-        projectile_path = "scripts/projectiles/test.lua"
+        projectile_path = "scripts/projectiles/big_boy.lua"
     }
     engine.new_projectile(p);
 end
+-- decrement
+function M.update(self)
+    self.cooldown = self.cooldown - engine.get_dt();
+    if self.cooldown <= 0 then
+        self.cooldown = 0;
+    end
+end
+
 
 return M

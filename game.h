@@ -15,8 +15,11 @@
 #define srccellh 16
 #define MAX_ELEMENTS 100
 #define MAX_ABILITIES 10
+#define MAX_TEXTURES 100
 #define winh 750
 #define winw 1200
+#define PLAYER_SPEED 300
+#define ABILITY_UI_SIZE 60
 
 #define max(a,b) ((a)>(b)?(a):(b))
 #define min(a,b) ((a)<(b)?(a):(b))
@@ -31,8 +34,10 @@ dec_dynarr(void);
 
 
 typedef struct {
+    char* name;
     int active;
     int ref, instance;
+    Texture texture;
 } item;
 
 typedef enum {
@@ -77,7 +82,9 @@ typedef struct {
     vec2 mouse_pos;
     entity* player; // player
     int player_handle; // player
-    element elements[MAX_ELEMENTS];
+    element* elements;
+    int elements_cap;
+
     int energy;
     int eps; // energy recovered per second.
 
@@ -89,9 +96,13 @@ typedef struct {
     int log_cap; // at which to start
 
     double dt;
+    // player movement
+    int move_to_dest;
     
     rect* camera;
 
+    Texture textures[MAX_TEXTURES];
+    int texture_count;
     script_entry loaded_scripts[128]; // or dynamic map
     int loaded_count;
     lua_State* L;
@@ -203,4 +214,15 @@ int get_lua_script_function(lua_State* L, int script_ref, const char* func_name)
 int ability_act(lua_State* L, int script_ref, int instance_ref);
 int game_get_or_load_script(game* game, const char* path);
 int init_ability(game* game, int entity_handle, int ability, char* script);
+float ability_get_cooldown(lua_State* L, int instance_ref);
+
+
+int get_int_from_table(lua_State* L, int instance_ref, const char* index);
+float get_float_from_table(lua_State* L, int instance_ref, const char* index);
+const char* get_string_from_table(lua_State* L, int instance_ref, const char* index);
+int get_bool_from_table(lua_State* L, int instance_ref, const char* index);
+
+
+
+
 #endif // GAME_H
