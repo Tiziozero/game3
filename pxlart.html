@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Pixel Art Editor</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0f0f0f;
+    --surface: #1a1a1a;
+    --surface2: #222;
+    --border: #333;
+    --accent: #e8ff47;
+    --accent2: #ff6b35;
+    --text: #e0e0e0;
+    --muted: #666;
+    --font: 'IBM Plex Mono', monospace;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  /* ── TOP BAR ── */
+  #topbar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 8px 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+
+  #topbar .logo {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-right: 8px;
+  }
+
+  .sep { width: 1px; height: 24px; background: var(--border); flex-shrink: 0; }
+
+  /* Size inputs */
+  .size-group { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+  .size-group input {
+    width: 44px; padding: 3px 6px;
+    background: var(--bg); border: 1px solid var(--border);
+    color: var(--text); font-family: var(--font); font-size: 11px;
+    border-radius: 3px; text-align: center;
+  }
+  .size-group input:focus { outline: none; border-color: var(--accent); }
+  .size-group button {
+    padding: 3px 8px; font-family: var(--font); font-size: 11px;
+    background: var(--accent); color: #000; border: none;
+    border-radius: 3px; cursor: pointer; font-weight: 600;
+  }
+  .size-group button:hover { background: #d4eb30; }
+
+  /* Frame nav */
+  #frame-nav { display: flex; align-items: center; gap: 6px; }
+  #frame-label { font-size: 11px; color: var(--muted); min-width: 70px; text-align: center; }
+  .nav-btn {
+    width: 28px; height: 28px; background: var(--surface2);
+    border: 1px solid var(--border); color: var(--text);
+    font-family: var(--font); font-size: 14px; cursor: pointer;
+    border-radius: 3px; display: flex; align-items: center; justify-content: center;
+    transition: border-color 0.1s;
+  }
+  .nav-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* Onion skin toggle */
+  .toggle-btn {
+    padding: 4px 10px; font-family: var(--font); font-size: 11px;
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--muted); border-radius: 3px; cursor: pointer;
+    transition: all 0.1s;
+  }
+  .toggle-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(232,255,71,0.07); }
+
+  /* Export */
+  #export-btn {
+    margin-left: auto;
+    padding: 4px 12px; font-family: var(--font); font-size: 11px;
+    background: transparent; border: 1px solid var(--border);
+    color: var(--muted); border-radius: 3px; cursor: pointer;
+    transition: all 0.1s;
+  }
+  #export-btn:hover { border-color: var(--accent2); color: var(--accent2); }
+
+  /* ref image */
+  #ref-btn {
+    padding: 4px 12px; font-family: var(--font); font-size: 11px;
+    background: transparent; border: 1px solid var(--border);
+    color: var(--muted); border-radius: 3px; cursor: pointer;
+    transition: all 0.1s;
+  }
+  #ref-btn:hover { border-color: #9b59b6; color: #9b59b6; }
+  #ref-btn.active { border-color: #9b59b6; color: #9b59b6; background: rgba(155,89,182,0.1); }
+
+  /* ── MAIN AREA ── */
+  #main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ── LEFT TOOLBAR ── */
+  #toolbar {
+    width: 48px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 10px 0;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+
+  .tool-btn {
+    width: 36px; height: 36px;
+    background: transparent; border: 1px solid transparent;
+    border-radius: 4px; cursor: pointer; color: var(--muted);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; transition: all 0.1s;
+    position: relative;
+  }
+  .tool-btn:hover { background: var(--surface2); color: var(--text); }
+  .tool-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(232,255,71,0.07); }
+
+  .tool-sep { width: 28px; height: 1px; background: var(--border); margin: 4px 0; }
+
+  /* Color swatch */
+  #color-swatch {
+    width: 28px; height: 28px;
+    border: 2px solid var(--border);
+    border-radius: 3px;
+    cursor: pointer;
+    margin-top: 4px;
+    position: relative;
+    overflow: hidden;
+  }
+  #color-swatch:hover { border-color: var(--accent); }
+  #color-input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+
+  /* Palette */
+  #palette {
+    display: grid;
+    grid-template-columns: repeat(2, 14px);
+    gap: 3px;
+    margin-top: 6px;
+    padding: 0 4px;
+  }
+  .pal-color {
+    width: 14px; height: 14px;
+    border-radius: 2px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: border-color 0.1s;
+  }
+  .pal-color:hover { border-color: var(--text); }
+  .pal-color.selected { border-color: var(--accent); }
+
+  /* Undo/redo at bottom of toolbar */
+  #toolbar-bottom {
+    margin-top: auto;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+  }
+
+  /* ── CANVAS AREA ── */
+  #canvas-wrap {
+    flex: 1;
+    overflow: scroll;
+    background:
+      repeating-conic-gradient(#1c1c1c 0% 25%, #141414 0% 50%)
+      0 0 / 20px 20px;
+    position: relative;
+  }
+
+  #canvas-wrap-inner {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px;
+    min-width: 100%;
+    min-height: 100%;
+    box-sizing: border-box;
+  }
+
+  #canvas-container {
+    position: relative;
+    display: inline-block;
+    image-rendering: pixelated;
+  }
+
+  canvas {
+    display: block;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    cursor: crosshair;
+  }
+
+  #canvas-main  { position: relative; z-index: 2; }
+  #canvas-ghost { position: absolute; top: 0; left: 0; z-index: 1; pointer-events: none; }
+  #canvas-grid  { position: absolute; top: 0; left: 0; z-index: 3; pointer-events: none; }
+
+  /* ── ZOOM ── */
+  #zoom-bar {
+    position: absolute;
+    bottom: 12px; right: 12px;
+    display: flex; align-items: center; gap: 6px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-size: 11px; color: var(--muted);
+    z-index: 10;
+  }
+  #zoom-bar button {
+    background: none; border: none; color: var(--text);
+    font-family: var(--font); font-size: 14px; cursor: pointer; padding: 0 2px;
+    line-height: 1;
+  }
+  #zoom-bar button:hover { color: var(--accent); }
+  #zoom-label { min-width: 36px; text-align: center; color: var(--text); }
+
+  /* tooltip */
+  .tool-btn::after {
+    content: attr(data-tip);
+    position: absolute;
+    left: calc(100% + 8px);
+    top: 50%;
+    transform: translateY(-50%);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 3px;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s;
+    z-index: 100;
+  }
+  .tool-btn:hover::after { opacity: 1; }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <span class="logo">PXLART</span>
+  <div class="sep"></div>
+
+  <div class="size-group">
+    <span>W</span>
+    <input type="number" id="inp-w" value="64" min="1" max="256">
+    <span>H</span>
+    <input type="number" id="inp-h" value="64" min="1" max="256">
+    <button id="resize-btn">RESIZE</button>
+  </div>
+
+  <div class="sep"></div>
+
+  <div id="frame-nav">
+    <button class="nav-btn" id="btn-prev" title="Previous frame">&#8249;</button>
+    <span id="frame-label">1 / 1</span>
+    <button class="nav-btn" id="btn-next" title="Next frame">&#8250;</button>
+  </div>
+
+  <div class="sep"></div>
+
+  <button class="toggle-btn active" id="onion-toggle">ONION</button>
+  <button class="toggle-btn active" id="grid-toggle">GRID</button>
+
+  <button id="ref-btn">REF IMAGE</button>
+  <input type="range" id="ref-opacity" min="5" max="100" value="35" step="5"
+    title="Reference opacity"
+    style="width:64px;display:none;accent-color:#9b59b6;">
+  <button id="ref-clear" style="display:none;padding:4px 8px;font-family:var(--font);font-size:11px;background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:3px;cursor:pointer;">✕ REF</button>
+  <input type="file" id="ref-file" accept="image/*" style="display:none">
+  <button id="export-btn">EXPORT PNG</button>
+</div>
+
+<!-- MAIN -->
+<div id="main">
+
+  <!-- TOOLBAR -->
+  <div id="toolbar">
+    <button class="tool-btn active" id="tool-pencil" data-tool="pencil" data-tip="Pencil (B)">✏</button>
+    <button class="tool-btn" id="tool-eraser" data-tool="eraser" data-tip="Eraser (E)">⬜</button>
+    <button class="tool-btn" id="tool-fill"   data-tool="fill"   data-tip="Fill (F)">◈</button>
+    <button class="tool-btn" id="tool-eyedrop" data-tool="eyedrop" data-tip="Pick (I)">⊕</button>
+
+    <div class="tool-sep"></div>
+
+    <!-- Color -->
+    <div id="color-swatch" title="Pick color">
+      <input type="color" id="color-input" value="#e8ff47">
+    </div>
+
+    <!-- Palette -->
+    <div id="palette"></div>
+
+    <div class="tool-sep"></div>
+
+    <div id="toolbar-bottom">
+      <button class="tool-btn" id="btn-undo" data-tip="Undo (Ctrl+Z)" title="Undo">↩</button>
+      <button class="tool-btn" id="btn-redo" data-tip="Redo (Ctrl+Y)" title="Redo">↪</button>
+    </div>
+  </div>
+
+  <!-- CANVAS -->
+  <div id="canvas-wrap">
+    <div id="canvas-wrap-inner">
+      <div id="canvas-container">
+        <canvas id="canvas-ref" style="position:absolute;top:0;left:0;z-index:0;pointer-events:none;opacity:0.35;"></canvas>
+        <canvas id="canvas-ghost"></canvas>
+        <canvas id="canvas-main"></canvas>
+        <canvas id="canvas-grid"></canvas>
+      </div>
+    </div>
+    <div id="zoom-bar">
+      <button id="zoom-out">−</button>
+      <span id="zoom-label">×8</span>
+      <button id="zoom-in">+</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── STATE ──────────────────────────────────────────────────────────────────
+let W = 64, H = 64;
+let zoom = 8;
+let tool = 'pencil';
+let color = '#e8ff47';
+let onionOn = true;
+let gridOn = true;
+let frames = [];      // each frame: Uint8ClampedArray of RGBA
+let frameIdx = 0;
+let painting = false;
+let lastCell = null;
+
+// undo/redo stacks per frame (store before-state)
+let undoStacks = [[]];
+let redoStacks = [[]];
+
+const ONION_ALPHA = 0.22;
+
+const PALETTE = [
+  '#0f0f0f','#ffffff','#e8ff47','#ff6b35',
+  '#00d4ff','#ff3366','#9b59b6','#2ecc71',
+  '#e67e22','#3498db','#e74c3c','#1abc9c',
+  '#f39c12','#8e44ad','#d35400','#27ae60',
+];
+
+// ── CANVAS SETUP ───────────────────────────────────────────────────────────
+const mainC   = document.getElementById('canvas-main');
+const ghostC  = document.getElementById('canvas-ghost');
+const gridC   = document.getElementById('canvas-grid');
+const refC    = document.getElementById('canvas-ref');
+const mainCtx = mainC.getContext('2d');
+const ghostCtx= ghostC.getContext('2d');
+const gridCtx = gridC.getContext('2d');
+const refCtx  = refC.getContext('2d');
+
+function hexToRgba(hex) {
+  const r = parseInt(hex.slice(1,3),16);
+  const g = parseInt(hex.slice(3,5),16);
+  const b = parseInt(hex.slice(5,7),16);
+  return [r,g,b,255];
+}
+
+function rgbaToHex(r,g,b) {
+  return '#' + [r,g,b].map(v => v.toString(16).padStart(2,'0')).join('');
+}
+
+function initFrames(w, h, keepData) {
+  W = w; H = h;
+  if (!keepData) {
+    frames = [new Uint8ClampedArray(W * H * 4)];
+    frameIdx = 0;
+    undoStacks = [[]];
+    redoStacks = [[]];
+  }
+  setCanvasSize();
+  renderAll();
+  updateFrameLabel();
+}
+
+function setCanvasSize() {
+  const pw = W * zoom, ph = H * zoom;
+  for (const c of [mainC, ghostC, gridC, refC]) {
+    c.width = pw; c.height = ph;
+  }
+  document.getElementById('canvas-container').style.width  = pw + 'px';
+  document.getElementById('canvas-container').style.height = ph + 'px';
+}
+
+// ── FRAME DATA ─────────────────────────────────────────────────────────────
+function currentFrame() { return frames[frameIdx]; }
+
+function saveUndo() {
+  undoStacks[frameIdx].push(new Uint8ClampedArray(currentFrame()));
+  redoStacks[frameIdx] = [];
+  if (undoStacks[frameIdx].length > 50) undoStacks[frameIdx].shift();
+}
+
+function undo() {
+  if (!undoStacks[frameIdx].length) return;
+  redoStacks[frameIdx].push(new Uint8ClampedArray(currentFrame()));
+  frames[frameIdx] = undoStacks[frameIdx].pop();
+  renderMain(); renderGhost();
+}
+
+function redo() {
+  if (!redoStacks[frameIdx].length) return;
+  undoStacks[frameIdx].push(new Uint8ClampedArray(currentFrame()));
+  frames[frameIdx] = redoStacks[frameIdx].pop();
+  renderMain(); renderGhost();
+}
+
+// ── RENDER ─────────────────────────────────────────────────────────────────
+// persistent offscreen canvas for main - never recreated
+const offMain = document.createElement('canvas');
+const offMainCtx = offMain.getContext('2d');
+
+function renderMain() {
+  offMain.width = W; offMain.height = H;
+  const img = offMainCtx.createImageData(W, H);
+  img.data.set(currentFrame());
+  offMainCtx.putImageData(img, 0, 0);
+  mainCtx.clearRect(0, 0, W*zoom, H*zoom);
+  mainCtx.imageSmoothingEnabled = false;
+  mainCtx.drawImage(offMain, 0, 0, W*zoom, H*zoom);
+}
+
+const offGhost = document.createElement('canvas');
+const offGhostCtx = offGhost.getContext('2d');
+
+function renderGhost() {
+  ghostCtx.clearRect(0, 0, W*zoom, H*zoom);
+  if (!onionOn) return;
+
+  offGhost.width = W; offGhost.height = H;
+
+  function drawOnion(idx, tint) {
+    if (idx < 0 || idx >= frames.length) return;
+    const img = offGhostCtx.createImageData(W, H);
+    const src = frames[idx];
+    const d = img.data;
+    for (let i = 0; i < src.length; i += 4) {
+      if (src[i+3] === 0) continue;
+      d[i]   = tint[0];
+      d[i+1] = tint[1];
+      d[i+2] = tint[2];
+      d[i+3] = src[i+3] * ONION_ALPHA;
+    }
+    offGhostCtx.putImageData(img, 0, 0);
+    ghostCtx.imageSmoothingEnabled = false;
+    ghostCtx.drawImage(offGhost, 0, 0, W*zoom, H*zoom);
+  }
+
+  drawOnion(frameIdx - 1, [255, 100, 50]);
+  drawOnion(frameIdx + 1, [50, 200, 255]);
+}
+
+function renderGrid() {
+  gridCtx.clearRect(0, 0, W*zoom, H*zoom);
+  if (!gridOn || zoom < 3) return;
+  gridCtx.strokeStyle = 'rgba(255,255,255,0.07)';
+  gridCtx.lineWidth = 0.5;
+  gridCtx.beginPath();
+  for (let x = 0; x <= W; x++) {
+    gridCtx.moveTo(x * zoom, 0);
+    gridCtx.lineTo(x * zoom, H * zoom);
+  }
+  for (let y = 0; y <= H; y++) {
+    gridCtx.moveTo(0, y * zoom);
+    gridCtx.lineTo(W * zoom, y * zoom);
+  }
+  gridCtx.stroke();
+}
+
+function renderAll() {
+  renderMain();
+  renderGhost();
+  renderGrid();
+}
+
+// ── DRAWING ────────────────────────────────────────────────────────────────
+function getCell(e) {
+  const rect = mainC.getBoundingClientRect();
+  const x = Math.floor((e.clientX - rect.left) / zoom);
+  const y = Math.floor((e.clientY - rect.top)  / zoom);
+  if (x < 0 || y < 0 || x >= W || y >= H) return null;
+  return { x, y };
+}
+
+function setPixel(x, y, rgba) {
+  const idx = (y * W + x) * 4;
+  const f = currentFrame();
+  f[idx]   = rgba[0];
+  f[idx+1] = rgba[1];
+  f[idx+2] = rgba[2];
+  f[idx+3] = rgba[3];
+}
+
+function getPixel(x, y) {
+  const idx = (y * W + x) * 4;
+  const f = currentFrame();
+  return [f[idx], f[idx+1], f[idx+2], f[idx+3]];
+}
+
+function drawAt(x, y) {
+  if (tool === 'pencil') {
+    const rgba = hexToRgba(color);
+    setPixel(x, y, rgba);
+    // fast path: paint just this one zoomed cell
+    mainCtx.fillStyle = color;
+    mainCtx.fillRect(x * zoom, y * zoom, zoom, zoom);
+    // keep offMain in sync
+    offMainCtx.fillStyle = color;
+    offMainCtx.fillRect(x, y, 1, 1);
+  } else if (tool === 'eraser') {
+    setPixel(x, y, [0,0,0,0]);
+    mainCtx.clearRect(x * zoom, y * zoom, zoom, zoom);
+    offMainCtx.clearRect(x, y, 1, 1);
+  } else if (tool === 'eyedrop') {
+    const [r,g,b,a] = getPixel(x, y);
+    if (a > 0) {
+      color = rgbaToHex(r,g,b);
+      document.getElementById('color-input').value = color;
+      document.getElementById('color-swatch').style.background = color;
+      updatePaletteSelection();
+    }
+    setActiveTool('pencil');
+  }
+}
+
+function floodFill(sx, sy, fillColor) {
+  const target = getPixel(sx, sy).join(',');
+  const fill = hexToRgba(fillColor);
+  if (target === fill.join(',')) return;
+
+  const stack = [[sx, sy]];
+  const visited = new Set();
+
+  while (stack.length) {
+    const [x, y] = stack.pop();
+    if (x < 0 || y < 0 || x >= W || y >= H) continue;
+    const key = y * W + x;
+    if (visited.has(key)) continue;
+    if (getPixel(x, y).join(',') !== target) continue;
+    visited.add(key);
+    setPixel(x, y, fill);
+    stack.push([x+1,y],[x-1,y],[x,y+1],[x,y-1]);
+  }
+  renderMain();
+}
+
+// ── MOUSE EVENTS ───────────────────────────────────────────────────────────
+mainC.addEventListener('mousedown', e => {
+  if (e.button !== 0) return;
+  painting = true;
+  const cell = getCell(e);
+  if (!cell) return;
+  saveUndo();
+  if (tool === 'fill') {
+    floodFill(cell.x, cell.y, color);
+  } else {
+    drawAt(cell.x, cell.y);
+    lastCell = cell;
+  }
+});
+
+mainC.addEventListener('mousemove', e => {
+  if (!painting) return;
+  const cell = getCell(e);
+  if (!cell) return;
+  if (lastCell && cell.x === lastCell.x && cell.y === lastCell.y) return;
+  if (tool !== 'fill') {
+    drawAt(cell.x, cell.y);
+    lastCell = cell;
+  }
+});
+
+window.addEventListener('mouseup', () => { painting = false; lastCell = null; });
+
+// Right click = erase
+mainC.addEventListener('contextmenu', e => {
+  e.preventDefault();
+  const cell = getCell(e);
+  if (!cell) return;
+  saveUndo();
+  setPixel(cell.x, cell.y, [0,0,0,0]);
+  renderMain();
+});
+
+// ── FRAMES ─────────────────────────────────────────────────────────────────
+function goToFrame(idx) {
+  if (idx < 0) idx = 0;
+  if (idx > frames.length) idx = frames.length; // allow one past end = new frame
+  if (idx === frames.length) {
+    frames.push(new Uint8ClampedArray(W * H * 4));
+    undoStacks.push([]);
+    redoStacks.push([]);
+  }
+  frameIdx = idx;
+  updateFrameLabel();
+  renderAll();
+}
+
+function updateFrameLabel() {
+  document.getElementById('frame-label').textContent = `${frameIdx+1} / ${frames.length}`;
+}
+
+document.getElementById('btn-prev').onclick = () => goToFrame(frameIdx - 1);
+document.getElementById('btn-next').onclick = () => goToFrame(frameIdx + 1);
+
+// ── TOOLS ──────────────────────────────────────────────────────────────────
+function setActiveTool(t) {
+  tool = t;
+  document.querySelectorAll('.tool-btn[data-tool]').forEach(b => {
+    b.classList.toggle('active', b.dataset.tool === t);
+  });
+}
+
+document.querySelectorAll('.tool-btn[data-tool]').forEach(b => {
+  b.onclick = () => setActiveTool(b.dataset.tool);
+});
+
+// ── COLOR ──────────────────────────────────────────────────────────────────
+const colorInput = document.getElementById('color-input');
+const colorSwatch = document.getElementById('color-swatch');
+
+colorInput.addEventListener('input', () => {
+  color = colorInput.value;
+  colorSwatch.style.background = color;
+  updatePaletteSelection();
+});
+colorSwatch.style.background = color;
+
+function buildPalette() {
+  const pal = document.getElementById('palette');
+  pal.innerHTML = '';
+  PALETTE.forEach(c => {
+    const el = document.createElement('div');
+    el.className = 'pal-color';
+    if (c === color) el.classList.add('selected');
+    el.style.background = c;
+    el.title = c;
+    el.onclick = () => {
+      color = c;
+      colorInput.value = c;
+      colorSwatch.style.background = c;
+      updatePaletteSelection();
+      if (tool === 'eraser') setActiveTool('pencil');
+    };
+    pal.appendChild(el);
+  });
+}
+
+function updatePaletteSelection() {
+  document.querySelectorAll('.pal-color').forEach(el => {
+    el.classList.toggle('selected', el.style.background === hexToRgbStyle(color));
+  });
+}
+
+function hexToRgbStyle(hex) {
+  const [r,g,b] = hexToRgba(hex);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+// ── TOGGLES ────────────────────────────────────────────────────────────────
+document.getElementById('onion-toggle').onclick = function() {
+  onionOn = !onionOn;
+  this.classList.toggle('active', onionOn);
+  renderGhost();
+};
+
+document.getElementById('grid-toggle').onclick = function() {
+  gridOn = !gridOn;
+  this.classList.toggle('active', gridOn);
+  renderGrid();
+};
+
+// ── ZOOM ───────────────────────────────────────────────────────────────────
+const ZOOM_LEVELS = [1, 1.5, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24, 32, 48, 64];
+let zoomIdx = ZOOM_LEVELS.indexOf(8);
+
+function setZoom(idx) {
+  zoomIdx = Math.max(0, Math.min(ZOOM_LEVELS.length - 1, idx));
+  zoom = ZOOM_LEVELS[zoomIdx];
+  const label = Number.isInteger(zoom) ? ('x' + zoom) : ('x' + zoom.toFixed(1));
+  document.getElementById('zoom-label').textContent = label;
+  setCanvasSize();
+  renderAll();
+  if (refLoaded) drawRefLayer();
+}
+
+document.getElementById('zoom-in').onclick  = () => setZoom(zoomIdx + 1);
+document.getElementById('zoom-out').onclick = () => setZoom(zoomIdx - 1);
+
+mainC.addEventListener('wheel', e => {
+  if (e.ctrlKey || e.metaKey) {
+    e.preventDefault();
+    setZoom(e.deltaY < 0 ? zoomIdx + 1 : zoomIdx - 1);
+  }
+  // else: let the event bubble so canvas-wrap scrolls naturally
+}, { passive: false });
+
+// ── RESIZE ─────────────────────────────────────────────────────────────────
+document.getElementById('resize-btn').onclick = () => {
+  const nw = parseInt(document.getElementById('inp-w').value) || 32;
+  const nh = parseInt(document.getElementById('inp-h').value) || 32;
+  if (nw === W && nh === H) return;
+
+  // Resize all frames, preserving content
+  frames = frames.map(f => {
+    const nf = new Uint8ClampedArray(nw * nh * 4);
+    for (let y = 0; y < Math.min(H, nh); y++) {
+      for (let x = 0; x < Math.min(W, nw); x++) {
+        const si = (y * W + x) * 4;
+        const di = (y * nw + x) * 4;
+        nf[di]   = f[si];
+        nf[di+1] = f[si+1];
+        nf[di+2] = f[si+2];
+        nf[di+3] = f[si+3];
+      }
+    }
+    return nf;
+  });
+
+  W = nw; H = nh;
+  undoStacks = frames.map(() => []);
+  redoStacks = frames.map(() => []);
+  setCanvasSize();
+  renderAll();
+  if (refLoaded) drawRefLayer();
+};
+
+// ── UNDO / REDO ────────────────────────────────────────────────────────────
+document.getElementById('btn-undo').onclick = undo;
+document.getElementById('btn-redo').onclick = redo;
+
+// ── EXPORT ─────────────────────────────────────────────────────────────────
+document.getElementById('export-btn').onclick = () => {
+  const tmp = document.createElement('canvas');
+  tmp.width = W; tmp.height = H;
+  const ctx = tmp.getContext('2d');
+  const img = ctx.createImageData(W, H);
+  img.data.set(currentFrame());
+  ctx.putImageData(img, 0, 0);
+  const a = document.createElement('a');
+  a.download = `frame_${frameIdx+1}.png`;
+  a.href = tmp.toDataURL('image/png');
+  a.click();
+};
+
+// ── KEYBOARD ───────────────────────────────────────────────────────────────
+window.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); return; }
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) { e.preventDefault(); redo(); return; }
+  switch (e.key.toLowerCase()) {
+    case 'b': setActiveTool('pencil'); break;
+    case 'e': setActiveTool('eraser'); break;
+    case 'f': setActiveTool('fill');   break;
+    case 'i': setActiveTool('eyedrop'); break;
+    case 'arrowleft':  goToFrame(frameIdx - 1); break;
+    case 'arrowright': goToFrame(frameIdx + 1); break;
+    case '+': case '=': setZoom(zoomIdx + 1); break;
+    case '-': setZoom(zoomIdx - 1); break;
+  }
+});
+
+// ── REFERENCE IMAGE ────────────────────────────────────────────────────────
+const refBtn     = document.getElementById('ref-btn');
+const refFile    = document.getElementById('ref-file');
+const refClear   = document.getElementById('ref-clear');
+const refOpacity = document.getElementById('ref-opacity');
+
+let refVisible = false;
+let refLoaded  = false;
+let refImage   = null;   // HTMLImageElement once loaded
+
+refBtn.onclick = () => {
+  if (!refLoaded) {
+    refFile.click();
+  } else {
+    refVisible = !refVisible;
+    refC.style.opacity = refVisible ? refOpacity.value / 100 : 0;
+    refBtn.classList.toggle('active', refVisible);
+  }
+};
+
+refFile.addEventListener('change', () => {
+  const file = refFile.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = evt => {
+    const img = new Image();
+    img.onload = () => {
+      refImage   = img;
+      refLoaded  = true;
+      refVisible = true;
+      refBtn.classList.add('active');
+      refOpacity.style.display = '';
+      refClear.style.display   = '';
+      drawRefLayer();
+    };
+    img.src = evt.target.result;
+  };
+  reader.readAsDataURL(file);
+  refFile.value = '';
+});
+
+refClear.onclick = () => {
+  refImage   = null;
+  refLoaded  = false;
+  refVisible = false;
+  refCtx.clearRect(0, 0, refC.width, refC.height);
+  refC.style.opacity       = 0;
+  refOpacity.style.display = 'none';
+  refClear.style.display   = 'none';
+  refBtn.classList.remove('active');
+};
+
+refOpacity.addEventListener('input', () => {
+  if (refVisible) refC.style.opacity = refOpacity.value / 100;
+});
+
+function drawRefLayer() {
+  if (!refImage) return;
+  // size the ref canvas to match the main canvas
+  refC.width  = W * zoom;
+  refC.height = H * zoom;
+  refCtx.imageSmoothingEnabled = true;
+  refCtx.imageSmoothingQuality = 'high';
+  // fit image inside canvas (letterbox), centred
+  const scale = Math.min((W * zoom) / refImage.naturalWidth, (H * zoom) / refImage.naturalHeight);
+  const dw = refImage.naturalWidth  * scale;
+  const dh = refImage.naturalHeight * scale;
+  const dx = ((W * zoom) - dw) / 2;
+  const dy = ((H * zoom) - dh) / 2;
+  refCtx.clearRect(0, 0, refC.width, refC.height);
+  refCtx.drawImage(refImage, dx, dy, dw, dh);
+  refC.style.opacity = refVisible ? refOpacity.value / 100 : 0;
+}
+
+// ── INIT ───────────────────────────────────────────────────────────────────
+buildPalette();
+initFrames(64, 64, false);
+</script>
+</body>
+</html>

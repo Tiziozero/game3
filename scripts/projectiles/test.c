@@ -1,0 +1,115 @@
+#include "../../game.h"
+#include "../../abilities.h"
+
+typedef struct {
+    int owner_handle, handle;
+    vec2 origin, pos, dir;
+    float damage_mltp, range, speed, r;
+    double cooldown, cooldown_time;
+    Color color;
+} proj_test_payload;
+
+// update feature
+int proj_test_update(game* game, void* payload) {
+    if (!payload) {
+        panic("No payload");
+        return 0;
+    }
+    proj_test_payload* self = (proj_test_payload*)payload;
+    if (self->cooldown > 0) {
+        dbg("cooldown %f.", self->cooldown);
+        return 1; // valid
+    }
+    self->cooldown = self->cooldown_time;
+    entity* owner = find_entity(game,self->owner_handle);
+    if (!owner) {
+        panic("No owner/invalid handle.");
+        return 0;
+    }
+    float dt = (float)game->dt;
+    vec2 pos1 = self->pos;
+    vec2 pos2 = vec2add(self->pos, vec2scale(self->dir, self->speed*dt));
+
+    int count;
+    collisions_ret_t* cols = entities_line_intersect(pos1,pos2,self->r, &count);
+    if (!cols) {
+        panic("Failed to get collisions");
+        return 0;
+    }
+    int handle = -1;
+    float distance = 0;
+    for (int i = 0; i < count; i++) {
+        collisions_ret_t c = cols[i];
+        if (c.handle == self->owner_handle) continue;
+        if (handle==-1) {
+            handle = c.handle;
+            distance = c.distance;
+        } else {
+            if (c.distance < distance) {
+                handle = c.handle;
+                distance = c.distance;
+            }
+        }
+    }
+    int remove = 0;
+    if (handle != -1) {
+        damage_target(owner->atk*self->damage_mltp, find_entity(game, handle));
+        remove = 1;
+    } else {
+        if (vec2dist(self->origin, pos2) >self->range){ 
+            /*dbg("range. %f %f %f %f %f %f", self->range,
+                    self->origin.x, self->origin.y, 
+                    pos2.x, pos2.y,
+                    vec2dist(self->origin, pos2)
+                    );*/
+            remove = 1;
+        }
+    }
+    if (remove) {
+        // dbg("removing element %d.", self->handle);
+        remove_element(game, self->handle);
+        return 1;
+    }
+    // update pos and element pos
+    self->pos = pos2;
+    get_element(game, self->handle)->pos = self->pos;
+
+
+    return 1;
+}
+
+int testpdraw(game* game, void* payload) {
+    if (!payload) {
+        panic("No payload");
+        return 0;
+    }
+    proj_test_payload* self = (proj_test_payload*)payload;
+    vec2 draw = apply_camera(self->pos, *game->camera);
+
+    DrawCircleV(draw, self->r,self->color);
+    return 1;
+}
+int proj_test_init(game * game, int owner_handle, element* e,
+        vec2 pos, vec2 dir, float r, float speed) {
+    proj_test_payload* ret = calloc(1,
+            sizeof(proj_test_payload));
+    if (!ret) panic("Failed to allocate memory");
+    proj_test_payload p = {0};
+    p.owner_handle = owner_handle;
+    p.range = 500.0f;
+    p.speed = speed;
+    p.damage_mltp = 1.2f;
+    p.color = GetColor(0xffcccccc);
+    p.pos = pos;
+    p.origin = pos;
+    p.dir = vec2norm(dir);
+    p.r = r;
+    p.handle = e->handle;
+    *ret = p;
+    e->payload = (void*)ret;
+    e->update = proj_test_update;
+    e->draw = testpdraw;
+    e->pos = p.pos;
+    return 1;
+}
+

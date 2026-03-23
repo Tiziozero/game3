@@ -37,6 +37,7 @@
 #define _vec(a, b) (vec2){(a),(b)}
 #define rect_pos(r) _vec((r).x, (r).y)
 #define rect_size(r) _vec((r).width, (r).height)
+#define rect_center(r) _vec((r).x+(r).width/2, (r).y+(r).height/2)
 #define dec_dynarr(t) typedef struct { t** data; int count; \
                         int cap; int size; } dynarr_##t;
 #define new_dynarr(t, name) dynarr_##t name = {}; name.count = 0; \

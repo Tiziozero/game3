@@ -12,7 +12,6 @@
 #include "game.h"
 // /home/kleidi/.tmp/Konachan.com - 346965 sample.adadjpg.jpg
 
-int projectile_body_hit(int entity, vec2 p, float r, rect body, vec2 prev_pos, float* dist);
 int load_env(const char *filename);
 
 int dynarr_add(void* ptr, void* data) {
@@ -102,13 +101,11 @@ void sort_entities_by_y(entity **arr, int n) {
         }
     }
 }
-entity* entities_new_entity(Arena* a, dynarr_entity* entities, float h, char* path) {
-    entity* e = arena_alloc(a, sizeof(entity));
-    init_entity(e, h, path);
-    e->body.x = 1000;
-    e->body.y = 1000;
+entity* game_new_entity(game* game, entity new_e) {
+    entity* e = arena_alloc(&game->gpa, sizeof(entity));
+    *e = new_e;
     e->status = status_on;
-    entities->data[entities->count++] = e;
+    game->entities.data[game->entities.count++] = e;
     return e;
 }
 entity* entities_remove_entity(dynarr_entity* entities, int index) {
@@ -164,43 +161,42 @@ int _game_new_element(
     }
     return 0;
 }
-int game_spawn_element(game* g, int ref, int instance) {
+element* game_alloc_element(game* g) {
+    element e = {0};
+    element* _e = game_spawn_element(g, e);
+    return _e;
+}
+int global_elements_count = 0;
+element* game_spawn_element(game* g, element _new) {
     for (int i = 0; i < g->elements_cap; i++) {
         element* e = &g->elements[i];
         if (!e->active) {
+            uint16_t gen = e->generation;
+            *e = _new;
             e->active = 1;
-            e->generation++;     // invalidate old handles
-            e->ref = ref;
-            e->instance_ref = instance;
-            return make_handle(i, e->generation);
+            e->generation = gen + 1;
+            if (e->generation == 0) e->generation = 1;
+            e->handle = make_handle(i, e->generation);
+            global_elements_count++;
+            return e;
         }
     }
-    g->elements = realloc(g->elements, (g->elements_cap*=2)*sizeof(element));
-    memset(g->elements + (g->elements_cap/2),
-            0, (g->elements_cap/2)*sizeof(element));
-    return game_spawn_element(g, ref,  instance);
-    // full, realloc
-
-    return -1; // full
+    dbg("realloc game elements.");
+    int old_cap = g->elements_cap;
+    g->elements_cap *= 2;
+    g->elements = realloc(g->elements, g->elements_cap * sizeof(element));
+    memset(g->elements + old_cap, 0, old_cap * sizeof(element));
+    return game_spawn_element(g, _new);
 }
 void remove_element(game* g, int handle) {
-
     element* e = get_element(g, handle);
     if (!e) {
-        panic("no e");
+        panic("no e with handle %d.", handle);
         return;
     }
-
-    lua_State* L = g->L;
-
-
-    if (e->instance_ref != LUA_NOREF) {
-        // free instance
-        luaL_unref(L, LUA_REGISTRYINDEX, e->instance_ref);
-    }
-
     e->active = 0;
-    info("Removed element %d", handle);
+    free(e->payload);
+    global_elements_count--;
     // DO NOT increment generation here
     // generation increments on next spawn
 }
@@ -232,21 +228,7 @@ float damage_target(float total_atk,entity* e) {
         e->status = status_die;
         dbg("entity %d dead", e->handle);
     }
-    dbg("AFTER %f", e->health);
     return e->health;
-}
-int l_damage_entity(lua_State* L)
-{
-    int handle = luaL_checkinteger(L, 1);
-    float dmg = luaL_checknumber(L, 2);
-
-    game* g = getgame();
-    entity* e = find_entity(g, handle);
-
-    if (!e) return 0;
-
-    damage_target(dmg, e);
-    return 0;
 }
 bool entities_overlap(entity** entities, int count, int* out_a, int* out_b) {
     for (int i = 0; i < count; i++) {
@@ -264,6 +246,15 @@ int update(game* game) {
     panic("todo");
     return 0;
 }
+int element_update(game* g, element* e) {
+    if (!e->active) return 0;
+    return e->update(g, e->payload);
+}
+int element_draw(game* g, element* e) {
+    if (!e->active) return 0;
+    return e->draw(g, e->payload);
+
+}
 float point_rect_dist(vec2 p, rect r) {
     // horizontal distance
     float dx = fmax(r.x - p.x, 0.0f);
@@ -274,67 +265,6 @@ float point_rect_dist(vec2 p, rect r) {
     dy = fmax(dy, p.y - (r.y + r.height));
     
     return sqrtf(dx*dx + dy*dy);
-}
-int l_projectile_body_hit(lua_State*L) {
-    float x1 = luaL_checknumber(L, 1);
-    float y1 = luaL_checknumber(L, 2);
-    float x2 = luaL_checknumber(L, 3);
-    float y2 = luaL_checknumber(L, 4);
-    game* game = getgame();
-
-    TODO("Handle");
-    return 0;
-}
-int element_update(game* g, element* e) {
-     if (!e->active) return 0;
-     lua_State* L = g->L;
-     // dbg("xy %f %f", e->pos.x, e->pos.y);
-    if (!get_lua_script_function(L, e->ref, "update")) {
-        panic("Failed to oget act.");
-        return 0;
-    }
-
-    // 3. push the instance table as self
-    lua_rawgeti(L, LUA_REGISTRYINDEX, e->instance_ref); // stack: script, act, self
-
-    // 4. call act(self)
-    if (lua_pcall(L, 1, 0, 0) != LUA_OK) { // 1 arg = self
-        printf("Lua act error: %s\n", lua_tostring(L, -1));
-        lua_pop(L, 1); // pop error
-        lua_pop(L, 1); // pop script table
-        return 0;
-    }
-
-    // 5. clean up: pop script table
-    lua_pop(L, 1);
-
-    return 1;
-
-}
-int element_draw(game* g, element* e) {
-     if (!e->active) return 0;
-     lua_State* L = g->L;
-    if (!get_lua_script_function(L, e->ref, "draw")) {
-        panic("Failed to oget act.");
-        return 0;
-    }
-
-    // 3. push the instance table as self
-    lua_rawgeti(L, LUA_REGISTRYINDEX, e->instance_ref); // stack: script, act, self
-
-    // 4. call act(self)
-    if (lua_pcall(L, 1, 0, 0) != LUA_OK) { // 1 arg = self
-        printf("Lua act error: %s\n", lua_tostring(L, -1));
-        lua_pop(L, 1); // pop error
-        lua_pop(L, 1); // pop script table
-        return 0;
-    }
-
-    // 5. clean up: pop script table
-    lua_pop(L, 1);
-
-    return 1;
-
 }
 bool point_in_rect(vec2 p, rect r) {
     return p.x >= r.x && p.x <= r.x + r.width &&
@@ -382,7 +312,7 @@ bool line_rect_intersect(vec2 p1, vec2 p2, rect r) {
 
     return false;
 }
-int ability_act(lua_State* L, int script_ref, int instance_ref);
+int l_ability_act(lua_State* L, int script_ref, int instance_ref);
 int entity_ability(game* game, int handle, int ability) {
     entity* e = find_entity(game, handle);
     if (!e) {
@@ -390,19 +320,21 @@ int entity_ability(game* game, int handle, int ability) {
         return 0;
     }
     if (ability >= 0 && ability < MAX_ABILITIES) {
-        dbg("entity ability %d", ability);
         if (!e->abilities[ability].active) {
             err("No ability");
             return 0;
         }
-        if (!ability_act(game->L, e->abilities[ability].ref, e->abilities[ability].instance)) {
-            panic("Failed to act ability. %d", e->abilities[ability].instance);
+        if (!ability_act(game, e->abilities[ability])) {
+            panic("Failed to act ability. %s", e->abilities[ability].name);
             return 0;
         }
     } else {
         panic("unhandeled");
     }
     return 1;
+}
+int ability_act(game* game, ability ability) {
+    return ability.act(game, ability.payload);
 }
 float point_segment_dist(vec2 p, vec2 a, vec2 b) {
     vec2 ab = { b.x - a.x, b.y - a.y };
@@ -437,7 +369,7 @@ float line_rect_shortest_dist(vec2 p1, vec2 p2, rect body) {
     return fminf(fminf(d0, d1), fminf(d2, d3));
 }
 // with updated position and prev
-int projectile_body_hit(int entity, vec2 p, float r, rect body, vec2 prev_pos, float* out_dist) {
+int projectile_body_hit(vec2 p, float r, rect body, vec2 prev_pos, float* out_dist) {
 
     if (circle_rect_intersect(p, r, body)) {
         // projectile directly hits body
@@ -446,7 +378,7 @@ int projectile_body_hit(int entity, vec2 p, float r, rect body, vec2 prev_pos, f
         return 1;
     }
     if (line_rect_intersect(p, prev_pos, body)) {
-        // projectile has interescted body some time in change in pos
+        // // projectile has interescted body some time in change in pos
         if (out_dist) *out_dist = line_rect_shortest_dist(p, prev_pos, body);
         return 1;
         return 1;
@@ -534,141 +466,68 @@ int get_lua_script_function(lua_State* L, int script_ref, const char* func_name)
     return 1;
 }
 // instance metatable contains script ref
-int ability_act(lua_State* L, int script_ref, int instance_ref) {
-    dbg("Ability script/instance %d/%d.", script_ref, instance_ref);
-    // 1. push the script table
-    if (!get_lua_script_function(L, script_ref, "act")) {
-        panic("Failed to oget act.");
-        return 0;
-    }
-
-    // 3. push the instance table as self
-    lua_rawgeti(L, LUA_REGISTRYINDEX, instance_ref); // stack: script, act, self
-
-    // 4. call act(self)
-    if (lua_pcall(L, 1, 0, 0) != LUA_OK) { // 1 arg = self
-        printf("Lua act error: %s\n", lua_tostring(L, -1));
-        lua_pop(L, 1); // pop error
-        lua_pop(L, 1); // pop script table
-        return 0;
-    }
-
-    // 5. clean up: pop script table
-    lua_pop(L, 1);
-
-    return 1;
 
 
-    dbg("Ability script/instance %d/%d.", script_ref, instance_ref);
-    lua_rawgeti(L, LUA_REGISTRYINDEX, instance_ref); // push instance
-    lua_getfield(L, -1, "script");                  // push instance.script (script)
-    lua_getfield(L, -1, "act");                     // push script.act
-    if (!lua_isfunction(L, -1)) {
-        lua_pop(L, 2);
-        err("Not a function");
-        return 0;
-    }
-    // pus self
-    lua_pushvalue(L, -3);                           // push instance as self
-    if (lua_pcall(L, 1, 0, 0) != LUA_OK) {
-        printf("Lua act error: %s\n", lua_tostring(L, -1));
-        lua_pop(L, 1);
-        return 0;
-    }
 
-    lua_pop(L, 1); // pop instance
-    return 1;
-}
+collisions_ret_t* entities_line_intersect(vec2 p1, vec2 p2, float r, int* _count) {
+    int cap = 10;
+    collisions_ret_t* c = calloc(1,cap*sizeof(collisions_ret_t));
+    int count = 0;
 
-int game_get_or_load_script(game* game, const char* path){
-    // 1️⃣ Check if already loaded
-    for (int i = 0; i < game->loaded_count; i++) {
-        if (strcmp(game->loaded_scripts[i].path, path) == 0) {
-            // Push the existing script table onto the Lua stack
-            lua_rawgeti(game->L, LUA_REGISTRYINDEX,
-                    game->loaded_scripts[i].ref);
-            return game->loaded_scripts[i].ref;
+    float x1 = p1.x, x2 = p2.x, y1= p1.y, y2 = p2.y;
+    for (int i = 0; i < getgame()->entities.count; i++) {
+        entity* e = getgame()->entities.data[i];
+        if (!e) continue;
+
+        // bounding box check
+        if (e->body.x + e->body.width < fmaxf(x1,x2) ||
+                e->body.x > fminf(x1,x2) ||
+                e->body.y + e->body.height < fmaxf(y1,y2) ||
+                e->body.y > fminf(y1,y2))
+            continue;
+
+        float dist;
+        if (projectile_body_hit(_vec(x1, y1),
+                    r, e->body, _vec(x2, y2), &dist)) {
+            if (count >= cap) {
+                c = realloc(c,
+                        (cap*=2)*sizeof(struct{int handle;float distance;}));
+            }
+            c[count].handle = e->handle;
+            c[count].distance = dist;
+            count++;
+            // create table for this hit
+
         }
     }
-
-    // 2️⃣ Not loaded yet, load it
-    if (luaL_dofile(game->L, path) != 0) {
-        fprintf(stderr, "Error loading script '%s': %s\n", path,
-                lua_tostring(game->L, -1));
-        lua_pop(game->L, 1);
-        return 0; // failure
-    }
-
-    // 3️⃣ Create a registry reference
-    int ref = luaL_ref(game->L, LUA_REGISTRYINDEX);
-
-    // 4️⃣ Store in game struct
-    if (game->loaded_count >= 128) {
-        fprintf(stderr, "Exceeded max loaded scripts\n");
-        return 0;
-    }
-
-    game->loaded_scripts[game->loaded_count].path = strdup(path);
-    game->loaded_scripts[game->loaded_count].ref = ref;
-    game->loaded_count++;
-
-    // Push the script table back onto the stack for convenience
-    lua_rawgeti(game->L, LUA_REGISTRYINDEX, ref);
-
-    dbg("New Script Ref %d.", ref);
-    return ref;
+    *_count = count;
+    return c;
 }
 
-
-int init_ability(game* game, int entity_handle, int ability, char* script) {
-    entity* e = find_entity(game, entity_handle);
-    if (!e) {
-        panic("entity does not exist.");
-        return 0;
-    }
-    if (e->abilities[ability].instance != LUA_NOREF) {
-        // free if forgot and set to 0
-        luaL_unref(game->L, LUA_REGISTRYINDEX, e->abilities[ability].instance);
-        e->abilities[ability].instance = LUA_NOREF;
-    }
-    if (e->abilities[ability].ref != LUA_NOREF) {
-        // free if forgot and set to 0
-        luaL_unref(game->L, LUA_REGISTRYINDEX, e->abilities[ability].ref);
-        e->abilities[ability].ref = LUA_NOREF;
-    }
-    int ref = game_get_or_load_script(game, script);
-    if (!ref) {
-        panic("No ref.");
-        return 0;
-    }
-    item i;
+int init_ability(game* game, int entity_handle, int ability_index, ability_kind ak) {
+    ability_init_handler a = get_ability(ak);
+    ability i = a(game, entity_handle);
     i.active = 1;
-    int instance = script_init(game->L, ref, entity_handle);
-    if (!instance) {
-        panic("No instance.");
-        return 0;
-    }
-    const char* icon = get_string_from_table(game->L, instance, "icon");
-    if (!icon) {
-        panic("No Icon.");
-        return 0;
-    }
-    i.ref = ref;
-    i.instance = instance;
-    i.texture = LoadTexture(icon);
-    e->abilities[ability] = i;
+    find_entity(game, entity_handle)->abilities[ability_index] = i;
     return 1;
 }
+
+entity* init_and_add_entity(game* game, float h, char* path) {
+    entity e;
+    init_entity(&e, h, path);
+    return game_new_entity(game, e);
+}
+
 int main(void) {
 
     // init env, window and lua
     load_env(".env");
     InitWindow(winw, winh, "Hello Raylib");
-    SetTargetFPS(60);
+    // SetTargetFPS(60);
     lua_State *L = luaL_newstate();
     luaL_openlibs(L);
     // register functions
-    register_engine(L);
+    // register_engine(L);
 
     // load map
     map map;
@@ -689,7 +548,7 @@ int main(void) {
     memset(&game, 0, sizeof(game));
     setgame(&game);
     game.L = L;
-    game.elements_cap = 1024;
+    game.elements_cap = MAX_ELEMENTS;
     game.elements = calloc(1,game.elements_cap*sizeof(element));
     for (int i = 0; i < game.elements_cap; i++) {
         game.elements[i].handle = 0;
@@ -702,37 +561,38 @@ int main(void) {
     Arena a = arena_new(1025, sizeof(entity));
     int ecount = 0; // entities count
     new_dynarr(entity, _entities);
+    game.gpa = a;
 
     game.entities = _entities;
     // take reference to player
-    entity* player = entities_new_entity(&a, &game.entities,
-            80.0f,getenv("PLAYER_PATH"));
-    // player_handle = player->handle;
-    if (player == 0) { panic("0");}
+    entity _player;
+    if (!init_entity(&_player, 80, getenv("PLAYER_PATH"))) panic("Failed to init player");
+    entity* player = game_new_entity(&game, _player);
+
     game.player = player;
     game.player_handle = player->handle;
     player->atk = 50;
     player->health = 230;
     player->max_health = 230;
-    init_ability(&game, game.player_handle,0, "scripts/abilities/test.lua");
-    init_ability(&game, game.player_handle,1, "scripts/abilities/big_boy.lua");
-    init_ability(&game, game.player_handle,4, "scripts/abilities/dash.lua");
+    init_ability(&game, game.player_handle,0, ability_kind_test);
+    init_ability(&game, game.player_handle,1, ability_kind_big_boy);
+
     printf("Player :%s\n", getenv("PLAYER_PATH"));
-    entity* enemy = entities_new_entity(&a, &game.entities,
+    entity* enemy = init_and_add_entity(&game,
             90.0f,getenv("ENEMY1"));
     enemy->atk = 50;
     enemy->health = 230;
     enemy->max_health = 230;
     enemy->body.x += PLAYER_SPEED;
     enemy->body.y += PLAYER_SPEED;
-    enemy = entities_new_entity(&a, &game.entities,
+    enemy = init_and_add_entity(&game,
             95.0f,getenv("ENEMY2"));
     enemy->atk = 50;
     enemy->health = 230;
     enemy->max_health = 230;
     enemy->body.x  += -100;
     enemy->body.y  += 150;
-    enemy = entities_new_entity(&a, &game.entities,
+    enemy = init_and_add_entity(&game,
             200.0f,getenv("ENEMY3"));
     enemy->atk = PLAYER_SPEED;
     enemy->health = 1030;
@@ -766,28 +626,9 @@ int main(void) {
         // update player abilities
         for (int i = 0; i < MAX_ABILITIES; i++) {
             
-            item a = player->abilities[i];
+            ability a = player->abilities[i];
             if (!a.active) { continue; }
-            lua_State* L = game.L;
-            // dbg("xy %f %f", e->pos.x, e->pos.y);
-            if (!get_lua_script_function(L, a.ref, "update")) {
-                panic("Failed to oget act.");
-                return 0;
-            }
-
-            // 3. push the instance table as self
-            lua_rawgeti(L, LUA_REGISTRYINDEX, a.instance); // stack: script, act, self
-
-            // 4. call act(self)
-            if (lua_pcall(L, 1, 0, 0) != LUA_OK) { // 1 arg = self
-                panic("Lua act error: %s", lua_tostring(L, -1));
-                lua_pop(L, 1); // pop error
-                lua_pop(L, 1); // pop script table
-                return 0;
-            }
-
-            // 5. clean up: pop script table
-            lua_pop(L, 1);
+            if (!a.update(&game, a.payload)) panic("Ability update failed.");
         }
         if (CLICK_TO_MOVE) {
             if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT)) {
@@ -886,10 +727,16 @@ int main(void) {
             int x = (int)(player->body.x / (float)(cellw));
             int y = (int)(player->body.y / (float)(cellh));
 
-            for (int i = x-range_h; i <= x+range_h && i < map.cols; i++) {
-                for (int j = y-range_v; j <= y+range_v && j < map.rows; j++) {
+            for (int i = x-range_h < 0 ? 0 : x-range_h; i <= x+range_h && i < map.cols; i++) {
+                for (int j = y-range_v < 0 ? 0 : y-range_v; j <= y+range_v && j < map.rows; j++) {
+                    if (i < 0 || j < 0) continue;
                     vec2 draw = apply_camera(_vec(i*cellw, j*cellh),
                             *game.camera);
+                    if (map.tiles[j*map.cols+i].n < 0 ||
+                            map.tiles[j*map.cols+i].n >= 3) {
+                        panic("more/less than 3/0 map %d (ij %d %d)",
+                            map.tiles[j*map.cols+i].n, i, j);
+                    }
                     DrawTexturePro(tiles,
                     _rect(304+srccellw*map.tiles[j*map.cols+i].n, 16,
                         srccellw,srccellh),
@@ -902,7 +749,7 @@ int main(void) {
         for (int i = 0; i < game.entities.count; i++) {
             draw_entity(game.entities.data[i], camera);
         }
-        for (int i = 0; i < 100; i++) {
+        for (int i = 0; i < game.elements_cap; i++) {
             element* e = &game.elements[i];
             if (!e->active) continue;
             element_update(&game, e);
@@ -921,13 +768,15 @@ int main(void) {
         DrawFPS(10, 10);
         char b[1024];
 
-        snprintf(b, 1024,"Lua memory: %d KB\n"
-                "dt: %.10lf\n"
+        snprintf(b, 1024,"Lua memory    : %d KB\n"
+                "dt                     : %.10lf\n"
                 "player (to move %d) x/y: %.0f, %.0f\n"
-                "movement mode: %s",
+                "movement mode          : %s\n"
+                "elements               : %d\n",
                 lua_gc(L, LUA_GCCOUNT),
                 dt, game.move_to_dest, player->body.x, player->body.y,
-                CLICK_TO_MOVE ? "click to move" : "wasd"
+                CLICK_TO_MOVE ? "click to move" : "wasd",
+                global_elements_count
                 );
         DrawText(b, 10, 50, 20, WHITE);
         // draw abilities
@@ -936,7 +785,8 @@ int main(void) {
         for (int i = 0; i < MAX_ABILITIES; i++) {
             int j = i%(MAX_ABILITIES/2); // row
             int k = i/(MAX_ABILITIES/2); // col
-            item ability = find_entity(&game, game.player_handle)->abilities[i];
+            ability ability =
+                find_entity(&game, game.player_handle)->abilities[i];
             float xoffset = 10 + j*(ABILITY_UI_SIZE+10);
             // add sub this if k == 1 (for cells after fifth).
             // to have next five above first five
@@ -946,16 +796,14 @@ int main(void) {
                         ABILITY_UI_SIZE, ABILITY_UI_SIZE,
                         GetColor(0x444444ff));
             } else {
-                float cd = get_float_from_table(game.L,
-                        ability.instance,"cooldown");
+                float cd = ability.cooldown;
                 Texture t = ability.texture;
                 DrawTexturePro(t,_rect(0,0,t.width,t.height),
                         _rect(xoffset, yoffset,
                             ABILITY_UI_SIZE, ABILITY_UI_SIZE),
                         _vec(0,0),0,WHITE);
                 if (cd > 0) {
-                    float cdt = get_float_from_table(game.L,
-                            ability.instance,"cooldown_time");
+                    float cdt = ability.cooldown_time;
                     // draw cooldown
                     DrawRectangle(xoffset, yoffset,
                             ABILITY_UI_SIZE, ABILITY_UI_SIZE,

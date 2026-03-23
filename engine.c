@@ -564,3 +564,189 @@ float ability_get_cooldown(lua_State* L, int instance_ref) {
     lua_pop(L, 2); // pop current_cooldown and instance
     return cd;
 }
+int l_ability_act(lua_State* L, int script_ref, int instance_ref) {
+    dbg("Ability script/instance %d/%d.", script_ref, instance_ref);
+    // 1. push the script table
+    if (!get_lua_script_function(L, script_ref, "act")) {
+        panic("Failed to oget act.");
+        return 0;
+    }
+
+    // 3. push the instance table as self
+    lua_rawgeti(L, LUA_REGISTRYINDEX, instance_ref); // stack: script, act, self
+
+    // 4. call act(self)
+    if (lua_pcall(L, 1, 0, 0) != LUA_OK) { // 1 arg = self
+        printf("Lua act error: %s\n", lua_tostring(L, -1));
+        lua_pop(L, 1); // pop error
+        lua_pop(L, 1); // pop script table
+        return 0;
+    }
+
+    // 5. clean up: pop script table
+    lua_pop(L, 1);
+
+    return 1;
+
+
+    dbg("Ability script/instance %d/%d.", script_ref, instance_ref);
+    lua_rawgeti(L, LUA_REGISTRYINDEX, instance_ref); // push instance
+    lua_getfield(L, -1, "script");                  // push instance.script (script)
+    lua_getfield(L, -1, "act");                     // push script.act
+    if (!lua_isfunction(L, -1)) {
+        lua_pop(L, 2);
+        err("Not a function");
+        return 0;
+    }
+    // pus self
+    lua_pushvalue(L, -3);                           // push instance as self
+    if (lua_pcall(L, 1, 0, 0) != LUA_OK) {
+        printf("Lua act error: %s\n", lua_tostring(L, -1));
+        lua_pop(L, 1);
+        return 0;
+    }
+
+    lua_pop(L, 1); // pop instance
+    return 1;
+}
+int l_init_ability(game* game, int entity_handle, int ability, char* script) {
+    entity* e = find_entity(game, entity_handle);
+    if (!e) {
+        panic("entity does not exist.");
+        return 0;
+    }
+    if (e->abilities[ability].instance != LUA_NOREF) {
+        // free if forgot and set to 0
+        luaL_unref(game->L, LUA_REGISTRYINDEX, e->abilities[ability].instance);
+        e->abilities[ability].instance = LUA_NOREF;
+    }
+    if (e->abilities[ability].ref != LUA_NOREF) {
+        // free if forgot and set to 0
+        luaL_unref(game->L, LUA_REGISTRYINDEX, e->abilities[ability].ref);
+        e->abilities[ability].ref = LUA_NOREF;
+    }
+    int ref = game_get_or_load_script(game, script);
+    if (!ref) {
+        panic("No ref.");
+        return 0;
+    }
+    item i;
+    i.active = 1;
+    int instance = script_init(game->L, ref, entity_handle);
+    if (!instance) {
+        panic("No instance.");
+        return 0;
+    }
+    const char* icon = get_string_from_table(game->L, instance, "icon");
+    if (!icon) {
+        panic("No Icon.");
+        return 0;
+    }
+    i.ref = ref;
+    i.instance = instance;
+    i.texture = LoadTexture(icon);
+    e->abilities[ability] = i;
+    return 1;
+}
+int _game_get_or_load_script(game* game, const char* path){
+    // 1️⃣ Check if already loaded
+    for (int i = 0; i < game->loaded_count; i++) {
+        if (strcmp(game->loaded_scripts[i].path, path) == 0) {
+            // Push the existing script table onto the Lua stack
+            lua_rawgeti(game->L, LUA_REGISTRYINDEX,
+                    game->loaded_scripts[i].ref);
+            return game->loaded_scripts[i].ref;
+        }
+    }
+
+    // 2️⃣ Not loaded yet, load it
+    if (luaL_dofile(game->L, path) != 0) {
+        fprintf(stderr, "Error loading script '%s': %s\n", path,
+                lua_tostring(game->L, -1));
+        lua_pop(game->L, 1);
+        return 0; // failure
+    }
+
+    // 3️⃣ Create a registry reference
+    int ref = luaL_ref(game->L, LUA_REGISTRYINDEX);
+
+    // 4️⃣ Store in game struct
+    if (game->loaded_count >= 128) {
+        fprintf(stderr, "Exceeded max loaded scripts\n");
+        return 0;
+    }
+
+    game->loaded_scripts[game->loaded_count].path = strdup(path);
+    game->loaded_scripts[game->loaded_count].ref = ref;
+    game->loaded_count++;
+
+    // Push the script table back onto the stack for convenience
+    lua_rawgeti(game->L, LUA_REGISTRYINDEX, ref);
+
+    dbg("New Script Ref %d.", ref);
+    return ref;
+}
+int l_damage_entity(lua_State* L)
+{
+    int handle = luaL_checkinteger(L, 1);
+    float dmg = luaL_checknumber(L, 2);
+
+    game* g = getgame();
+    entity* e = find_entity(g, handle);
+
+    if (!e) return 0;
+
+    damage_target(dmg, e);
+    return 0;
+}
+int l_element_update(game* g, element* e) {
+     if (!e->active) return 0;
+     lua_State* L = g->L;
+     // dbg("xy %f %f", e->pos.x, e->pos.y);
+    if (!get_lua_script_function(L, e->ref, "update")) {
+        panic("Failed to oget act.");
+        return 0;
+    }
+
+    // 3. push the instance table as self
+    lua_rawgeti(L, LUA_REGISTRYINDEX, e->instance_ref); // stack: script, act, self
+
+    // 4. call act(self)
+    if (lua_pcall(L, 1, 0, 0) != LUA_OK) { // 1 arg = self
+        printf("Lua act error: %s\n", lua_tostring(L, -1));
+        lua_pop(L, 1); // pop error
+        lua_pop(L, 1); // pop script table
+        return 0;
+    }
+
+    // 5. clean up: pop script table
+    lua_pop(L, 1);
+
+    return 1;
+
+}
+int l_element_draw(game* g, element* e) {
+     if (!e->active) return 0;
+     lua_State* L = g->L;
+    if (!get_lua_script_function(L, e->ref, "draw")) {
+        panic("Failed to oget act.");
+        return 0;
+    }
+
+    // 3. push the instance table as self
+    lua_rawgeti(L, LUA_REGISTRYINDEX, e->instance_ref); // stack: script, act, self
+
+    // 4. call act(self)
+    if (lua_pcall(L, 1, 0, 0) != LUA_OK) { // 1 arg = self
+        printf("Lua act error: %s\n", lua_tostring(L, -1));
+        lua_pop(L, 1); // pop error
+        lua_pop(L, 1); // pop script table
+        return 0;
+    }
+
+    // 5. clean up: pop script table
+    lua_pop(L, 1);
+
+    return 1;
+
+}

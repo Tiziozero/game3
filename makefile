@@ -1,4 +1,4 @@
-SRC=main.c env.c game.c engine.c
+SRC=main.c env.c game.c scripts/abilities/*.c scripts/projectiles/*.c
 INCLIDES=
 INCLUDES += -Iexternal/lua
 LIBS=-L. -lraylib
