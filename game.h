@@ -11,7 +11,12 @@
 // abilities
 #define dec_ability(action) \
     action(test) \
-    action(big_boy) \
+    action(big_boy)
+
+#define dec_entity(action) \
+    action(basic_enemy) \
+    action(sweetie) \
+
 // big consts
 #define cellw 3*16
 #define cellh 3*16
@@ -28,6 +33,7 @@
 #define max(a,b) ((a)>(b)?(a):(b))
 #define min(a,b) ((a)<(b)?(a):(b))
 typedef enum ability_kind ability_kind;
+typedef enum entity_kind entity_kind;
 
 void dbg_table(lua_State* L, int index);
 
@@ -47,7 +53,7 @@ typedef struct {
 } lua_item;
 
 typedef void(* init_handler)(game* game, int owner_handle);
-typedef int (*act_handler)(game* game, void* payload);
+typedef int (*ability_act_handler)(game* game, void* payload);
 
 typedef struct {
     int active;
@@ -57,9 +63,9 @@ typedef struct {
     Texture texture;
     // call for payload
     // init_handler init;
-    act_handler act;
-    act_handler update; // dt and what not
-    act_handler draw;
+    ability_act_handler act;
+    ability_act_handler update; // dt and what not
+    ability_act_handler draw;
 } item;
 typedef struct {
     int active;
@@ -70,7 +76,7 @@ typedef struct {
     double cooldown, cooldown_time;
     // call for payload
     // init_handler init;
-    act_handler act, update, draw; // dt and what not
+    ability_act_handler act, update, draw; // dt and what not
 } ability;
 
 typedef enum {
@@ -79,25 +85,30 @@ typedef enum {
     status_dead = 0,
 }entity_status;
 
-typedef int (*entity_act)(game* game, void* payload);
+// handle for entities and elements
+typedef int (*entity_act_handler)(game* game, int handle, void* payload);
 typedef struct {
     entity_status status;
     int handle;
     Texture2D image;
     rect body; // pos/destination
+    vec2 direction;
     double atk, def, health, max_health; // def:multuplier for damage
     ability abilities[MAX_ELEMENTS];
     void* payload;
-    entity_act update, draw;
+    entity_act_handler update, draw;
 } entity;
 dec_dynarr(entity);
+
+// handle for entities and elements
+typedef int (*element_act_handler)(game* game, int handle, void* payload);
 typedef struct {
     int active, handle, instance_ref, ref;
     uint16_t generation;   // increments every reuse
     vec2 pos;
     void* payload;
     // init_handler init;
-    act_handler update, draw;
+    element_act_handler update, draw;
 } element; // like projectiles and what not
 dec_dynarr(element);
 
@@ -265,10 +276,12 @@ typedef struct{int handle; float distance;} collisions_ret_t;
 collisions_ret_t* entities_line_intersect
                                 (vec2 p1, vec2 p2, float r, int* _count);
 element* game_alloc_element(game* g);
-
+int init_ability(game* game, int entity_handle, int ability_index, ability_kind ak);
+int entity_ability(game* game, int handle, int ability);
 static inline int default_draw(game* game, void* payload) {
     return 1;
 }
+int basic_entity_draw(game* game, int handle, void* payload);
 
 
 #define a(n) ability_init_##n
@@ -291,6 +304,40 @@ static inline ability_init_handler get_ability(ability_kind k) {
     if (k < 0 || k >= ability_kind_count)
         panic("Unknown ability");
     return ability_table[k];
+}
+int proj_test_init(game * game, int owner_handle, element* e,
+        vec2 pos, vec2 dir, float r, float speed);
+int big_boy_boom_init(game * game, int owner_handle, element* e,
+        vec2 pos, vec2 dir, float r, float speed);
+#undef HANDLER_ENTRY
+#undef a
+#undef ab
+#undef b
+#undef bc
+#undef c
+
+// entities stuff
+#define a(n) entity_init_##n
+#define ab(n) entity*  a(n)(game * game);
+#define b(n) entity_kind_##n
+#define bc(n) b(n),
+dec_entity(ab)
+enum entity_kind{
+    dec_ability(bc)
+    entity_kind_count,
+};
+#define c(n) if (k == b(n)) return a(n);
+typedef entity* (*entity_init_handler)(game* game);
+
+
+#define HANDLER_ENTRY(n) entity_init_##n,
+static entity_init_handler entity_table[] = {
+    dec_entity(HANDLER_ENTRY)
+};
+static inline entity_init_handler get_entity(entity_kind k) {
+    if (k < 0 || k >= entity_kind_count)
+        panic("Unknown entity");
+    return entity_table[k];
 }
 int proj_test_init(game * game, int owner_handle, element* e,
         vec2 pos, vec2 dir, float r, float speed);

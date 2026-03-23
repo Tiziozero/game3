@@ -67,6 +67,41 @@ int draw_entity(entity* e, rect camera) {
     }
     return 1;
 }
+int basic_entity_update(game* game, int handle, void* payload) {
+    return 1;
+}
+int basic_entity_draw(game* game, int handle, void* payload) {
+    rect camera = *game->camera;
+    entity* e = find_entity(game, handle);
+    int draw_health = 1;
+    rect body = e->body;
+    if (body.x > camera.x+camera.width || body.x + body.width < camera.x) return 1;// skip
+    if (body.y > camera.y+camera.height || body.y + body.height < camera.y) return 1;// skip
+    vec2 origin = _vec(e->body.width/2, e->body.height/2);
+    float r = 0;
+    vec2 draw = apply_camera(_vec(e->body.x+origin.x,e->body.y+origin.y) , camera);
+    DrawTexturePro(e->image,
+            _rect(0,0,e->image.width,e->image.height),
+            _rect(draw.x, draw.y, e->body.width, e->body.height),
+            origin,
+            r, WHITE);
+    draw = apply_camera(rect_pos(e->body), camera);
+    DrawRectangleLines(draw.x, draw.y, e->body.width, e->body.height, RED);
+    if (draw_health) {
+    float health_bar_width = 0.8 * e->body.width;
+    float health_bar_height = 5;
+    vec2 pos = vec2add(
+            // offset by 0.1% of body, sice width is 0.8
+            vec2add(vec2scale(_vec(1,0), 0.1*e->body.width), _vec(0,-10)), rect_pos(e->body));
+    DrawRectangleV(apply_camera(pos, camera),
+            _vec(health_bar_width, health_bar_height), BLACK);
+    // draw healt
+    DrawRectangleV(apply_camera(pos, camera),
+            _vec(health_bar_width*(e->health/e->max_health),
+                health_bar_height), RED);
+    }
+    return 1;
+}
 int init_entity(entity* ent, float h, char* path) {
     static int handle = 1;
     entity e;
@@ -115,6 +150,7 @@ entity* entities_remove_entity(dynarr_entity* entities, int index) {
 
     entities->count--;
     entities->data[index] = entities->data[entities->count];
+    dbg("Removed entity %d.", index);
 
     return removed;
 }
@@ -217,7 +253,8 @@ game* getgame() {
 
 entity* find_entity(game* g, int handle) {
     for (int i=0;i<g->entities.count;i++)
-        if (g->entities.data[i]->handle == handle)
+        if (g->entities.data[i]->handle == handle &&
+                g->entities.data[i]->status != status_dead)
             return g->entities.data[i];
     return NULL;
 }
@@ -248,11 +285,11 @@ int update(game* game) {
 }
 int element_update(game* g, element* e) {
     if (!e->active) return 0;
-    return e->update(g, e->payload);
+    return e->update(g, e->handle, e->payload);
 }
 int element_draw(game* g, element* e) {
     if (!e->active) return 0;
-    return e->draw(g, e->payload);
+    return e->draw(g, e->handle, e->payload);
 
 }
 float point_rect_dist(vec2 p, rect r) {
@@ -570,6 +607,8 @@ int main(void) {
     entity* player = game_new_entity(&game, _player);
 
     game.player = player;
+    player->update = basic_entity_update;
+    player->draw = basic_entity_draw;
     game.player_handle = player->handle;
     player->atk = 50;
     player->health = 230;
@@ -578,6 +617,7 @@ int main(void) {
     init_ability(&game, game.player_handle,1, ability_kind_big_boy);
 
     printf("Player :%s\n", getenv("PLAYER_PATH"));
+    /*
     entity* enemy = init_and_add_entity(&game,
             90.0f,getenv("ENEMY1"));
     enemy->atk = 50;
@@ -598,7 +638,19 @@ int main(void) {
     enemy->health = 1030;
     enemy->max_health = 1030;
     enemy->body.x += -100;
+    enemy->body.y += -350;*/
+    entity* enemy = entity_init_basic_enemy(&game);
+    enemy->body.x  += -100;
+    enemy->body.y  += 150;
+    enemy = entity_init_basic_enemy(&game);
+    enemy->body.x += PLAYER_SPEED;
+    enemy->body.y += PLAYER_SPEED;
+    enemy = entity_init_basic_enemy(&game);
+    enemy->body.x += -100;
     enemy->body.y += -350;
+    enemy = entity_init_sweetie(&game);
+    enemy->body.x += 500;
+    enemy->body.y += 500;
     game.log_cap = 10;
     game.log_count = 0;
     game.logs = malloc(game.log_cap*sizeof(char*));
@@ -623,13 +675,8 @@ int main(void) {
         last = now;
         game.dt = dt;
         game.mouse_pos = GetMousePosition();
-        // update player abilities
-        for (int i = 0; i < MAX_ABILITIES; i++) {
-            
-            ability a = player->abilities[i];
-            if (!a.active) { continue; }
-            if (!a.update(&game, a.payload)) panic("Ability update failed.");
-        }
+        player->direction = vec2norm(vec2sub(game.mouse_pos,
+                    _vec((float)winw/2, (float)winh/2)));
         if (CLICK_TO_MOVE) {
             if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT)) {
                 player_dest = unapply_camera(game.mouse_pos, *game.camera);
@@ -747,7 +794,25 @@ int main(void) {
         }
         sort_entities_by_y(game.entities.data, game.entities.count);
         for (int i = 0; i < game.entities.count; i++) {
-            draw_entity(game.entities.data[i], camera);
+            entity* e = game.entities.data[i];
+            // update entity abilities
+            for (int i = 0; i < MAX_ABILITIES; i++) {
+
+                ability a = e->abilities[i];
+                if (!a.active) { continue; }
+                if (!a.update(&game, a.payload)) {
+                    panic("Ability update failed.");
+                }
+            }
+            if (!e->update) {
+                panic("No entity update funcrion. %d", e->handle);
+            } else
+                e->update(&game, e->handle, e->payload);
+            // draw_entity(e, camera);
+            if (!e->draw) {
+                panic("No entity draw funcrion. %d", e->handle);
+            } else
+                e->draw(&game, e->handle, e->payload);
         }
         for (int i = 0; i < game.elements_cap; i++) {
             element* e = &game.elements[i];
@@ -818,10 +883,15 @@ int main(void) {
         for (int i = 0; i < game.entities.count; i++) {
             entity* e = game.entities.data[i];
             if (e->status == status_dead || e->status == status_die) {
+                if (e->handle == game.player_handle) {
+                    dbg("Player dead.");
+                    exit(0);
+                }
                 if (!entities_remove_entity(&game.entities, i)) {
                     panic("null entity in remove.");
                     exit(-1);
                 }
+                i-=1;
             }
         }
     }

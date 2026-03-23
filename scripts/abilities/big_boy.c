@@ -22,8 +22,7 @@ int big_boy(game* game, void* payload) {
         panic("No owner/invalid handle.");
         return 0;
     }
-    vec2 mpos = unapply_camera(game->mouse_pos,*game->camera);
-    vec2 ds = vec2sub(mpos,rect_center(owner->body));
+    vec2 ds = owner->direction;
     float radius = 30.0f;
     element* _e = game_alloc_element(game);
     if (!big_boy_boom_init(game, self->owner_handle, _e,

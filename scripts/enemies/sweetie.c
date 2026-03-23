@@ -3,10 +3,10 @@
 typedef struct {
     int handle;
     double cooldown, time;
-} basic_enemy;
+} enemy_sweetie;
 
-int basic_enemy_update(game* game, int handle, void* payload) {
-    basic_enemy* p = payload;
+int sweetie_update(game* game, int handle, void* payload) {
+    enemy_sweetie* p = payload;
     entity* player = game->player;
     entity* self = find_entity(game, handle);
     self->direction = vec2sub(rect_pos(player->body), rect_pos(self->body));
@@ -18,13 +18,13 @@ int basic_enemy_update(game* game, int handle, void* payload) {
     }
     return 1;
 }
-entity* entity_init_basic_enemy(game * game) {
-    basic_enemy* ret = calloc(1,
-            sizeof(basic_enemy));
+entity* entity_init_sweetie(game * game) {
+    enemy_sweetie* ret = calloc(1,
+            sizeof(enemy_sweetie));
     if (!ret) panic("Failed to allocate memory");
-    basic_enemy p = {0};
+    enemy_sweetie p = {0};
     entity e;
-    if (!init_entity(&e, 80.0f, getenv("ENEMY1"))) {
+    if (!init_entity(&e, 120.0f, getenv("ENEMY4"))) {
         panic("Failed to create entity?");
         return NULL;
     }
@@ -32,14 +32,15 @@ entity* entity_init_basic_enemy(game * game) {
     p.time = 1.5f;
     *ret = p;
     e.payload = ret;
-    e.atk = 20;
-    e.health = 150;
-    e.max_health = 150;
+    e.atk = 200;
+    e.health = 1500;
+    e.max_health = 1500;
     e.def = 0;
     e.status = status_on;
     e.draw = basic_entity_draw;
-    e.update = basic_enemy_update;
+    e.update = sweetie_update;
     entity* entity = game_new_entity(game, e);
     init_ability(game, e.handle, 0, ability_kind_test);
     return entity;
 }
+

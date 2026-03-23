@@ -12,7 +12,7 @@ typedef struct {
 int big_boy_boom_init(game * game, int owner_handle, element* e,
         vec2 pos, vec2 dir, float r, float speed);
 // update feature
-int big_boy_boom_update(game* game, void* payload) {
+int big_boy_boom_update(game* game, int handle, void* payload) {
     if (!payload) {
         panic("No payload");
         return 0;
@@ -25,7 +25,7 @@ int big_boy_boom_update(game* game, void* payload) {
     self->cooldown = self->cooldown_time;
     entity* owner = find_entity(game,self->owner_handle);
     if (!owner) {
-        panic("No owner/invalid handle.");
+        panic("No owner/invalid handle. (projectile big boy)");
         return 0;
     }
     float dt = (float)game->dt;
@@ -38,26 +38,26 @@ int big_boy_boom_update(game* game, void* payload) {
         panic("Failed to get collisions");
         return 0;
     }
-    int handle = -1;
+    int _handle = -1;
     float distance = 0;
     for (int i = 0; i < count; i++) {
         collisions_ret_t c = cols[i];
         if (c.handle == self->owner_handle) continue;
-        if (handle==-1) {
-            handle = c.handle;
+        if (_handle==-1) {
+            _handle = c.handle;
             distance = c.distance;
         } else {
             if (c.distance < distance) {
-                handle = c.handle;
+                _handle = c.handle;
                 distance = c.distance;
             }
         }
     }
     int remove = 0;
-    if (handle != -1) {
+    if (_handle != -1) {
         info("Damaging for %f", (owner->atk + self->damage)*self->damage_mltp);
         damage_target((owner->atk + self->damage)*self->damage_mltp,
-                find_entity(game, handle));
+                find_entity(game, _handle));
         remove = 1;
     } else {
         if (vec2dist(self->origin, pos2) >self->range){ 
@@ -82,7 +82,7 @@ int big_boy_boom_update(game* game, void* payload) {
     return 1;
 }
 
-int big_boy_boom_draw(game* game, void* payload) {
+int big_boy_boom_draw(game* game, int handle, void* payload) {
     if (!payload) {
         panic("No payload");
         return 0;
