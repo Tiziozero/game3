@@ -22,8 +22,10 @@
 #define MAX_ELEMENTS 1024
 #define MAX_ABILITIES 10
 #define MAX_TEXTURES 100
-#define winh 750
-#define winw 1200
+#define _winh 750
+#define _winw 1200
+#define screenw _winw*2
+#define screenh _winh*2
 #define PLAYER_SPEED 300
 #define ABILITY_UI_SIZE 60
 char* get_env(char* path);

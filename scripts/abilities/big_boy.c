@@ -13,7 +13,7 @@ int big_boy(game* game, void* payload) {
     }
     big_boy_payload* self = (big_boy_payload*)payload;
     if (self->cooldown > 0) {
-        dbg("cooldown %f.", self->cooldown);
+        // dbg("cooldown %f.", self->cooldown);
         return 1; // valid
     }
     self->cooldown = self->cooldown_time;

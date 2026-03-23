@@ -9,7 +9,9 @@ int basic_enemy_update(game* game, int handle, void* payload) {
     basic_enemy* p = payload;
     entity* player = game->player;
     entity* self = find_entity(game, handle);
-    self->direction = vec2sub(rect_pos(player->body), rect_pos(self->body));
+    self->direction = vec2sub(
+            vec2add(vec2scale(rect_size(player->body),0.5),rect_pos(player->body)),
+            vec2add(vec2scale(rect_size(self->body),0.5),rect_pos(self->body)));
     if (p->cooldown <= 0) {
         entity_ability(game, handle, 0);
         p->cooldown = p->time;

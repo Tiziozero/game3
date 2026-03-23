@@ -17,7 +17,7 @@ int proj_test_update(game* game, int handle, void* payload) {
     }
     proj_test_payload* self = (proj_test_payload*)payload;
     if (self->cooldown > 0) {
-        dbg("cooldown %f.", self->cooldown);
+        // dbg("cooldown %f.", self->cooldown);
         return 1; // valid
     }
     self->cooldown = self->cooldown_time;

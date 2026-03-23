@@ -34,11 +34,11 @@ int dynarr_add(void* ptr, void* data) {
 
 vec2 apply_camera(vec2 world_pos, rect camera) {
     return _vec(world_pos.x - camera.x,
-        world_pos.y - camera.y);
+            world_pos.y - camera.y);
 }
 vec2 unapply_camera(vec2 screen_pos, rect camera) {
     return _vec(screen_pos.x + camera.x,
-                screen_pos.y + camera.y);
+            screen_pos.y + camera.y);
 }
 int draw_entity(entity* e, rect camera) {
     int draw_health = 1;
@@ -56,17 +56,17 @@ int draw_entity(entity* e, rect camera) {
     draw = apply_camera(rect_pos(e->body), camera);
     DrawRectangleLines(draw.x, draw.y, e->body.width, e->body.height, RED);
     if (draw_health) {
-    float health_bar_width = 0.8 * e->body.width;
-    float health_bar_height = 5;
-    vec2 pos = vec2add(
-            // offset by 0.1% of body, sice width is 0.8
-            vec2add(vec2scale(_vec(1,0), 0.1*e->body.width), _vec(0,-10)), rect_pos(e->body));
-    DrawRectangleV(apply_camera(pos, camera),
-            _vec(health_bar_width, health_bar_height), BLACK);
-    // draw healt
-    DrawRectangleV(apply_camera(pos, camera),
-            _vec(health_bar_width*(e->health/e->max_health),
-                health_bar_height), RED);
+        float health_bar_width = 0.8 * e->body.width;
+        float health_bar_height = 5;
+        vec2 pos = vec2add(
+                // offset by 0.1% of body, sice width is 0.8
+                vec2add(vec2scale(_vec(1,0), 0.1*e->body.width), _vec(0,-10)), rect_pos(e->body));
+        DrawRectangleV(apply_camera(pos, camera),
+                _vec(health_bar_width, health_bar_height), BLACK);
+        // draw healt
+        DrawRectangleV(apply_camera(pos, camera),
+                _vec(health_bar_width*(e->health/e->max_health),
+                    health_bar_height), RED);
     }
     return 1;
 }
@@ -91,17 +91,17 @@ int basic_entity_draw(game* game, int handle, void* payload) {
     draw = apply_camera(rect_pos(e->body), camera);
     DrawRectangleLines(draw.x, draw.y, e->body.width, e->body.height, RED);
     if (draw_health) {
-    float health_bar_width = 0.8 * e->body.width;
-    float health_bar_height = 5;
-    vec2 pos = vec2add(
-            // offset by 0.1% of body, sice width is 0.8
-            vec2add(vec2scale(_vec(1,0), 0.1*e->body.width), _vec(0,-10)), rect_pos(e->body));
-    DrawRectangleV(apply_camera(pos, camera),
-            _vec(health_bar_width, health_bar_height), BLACK);
-    // draw healt
-    DrawRectangleV(apply_camera(pos, camera),
-            _vec(health_bar_width*(e->health/e->max_health),
-                health_bar_height), RED);
+        float health_bar_width = 0.8 * e->body.width;
+        float health_bar_height = 5;
+        vec2 pos = vec2add(
+                // offset by 0.1% of body, sice width is 0.8
+                vec2add(vec2scale(_vec(1,0), 0.1*e->body.width), _vec(0,-10)), rect_pos(e->body));
+        DrawRectangleV(apply_camera(pos, camera),
+                _vec(health_bar_width, health_bar_height), BLACK);
+        // draw healt
+        DrawRectangleV(apply_camera(pos, camera),
+                _vec(health_bar_width*(e->health/e->max_health),
+                    health_bar_height), RED);
     }
     return 1;
 }
@@ -157,7 +157,7 @@ entity* entities_remove_entity(dynarr_entity* entities, int index) {
 
     return removed;
 }
-    // Map: script path -> LUA_REF
+// Map: script path -> LUA_REF
 // int get_lua_script_function(lua_State* L, int script_ref, const char* func_name);
 element* get_element(game* g, int handle) {
 
@@ -187,7 +187,7 @@ int game_log(game*game, char*msg) {
     return 1;
 }
 int _game_new_element(
-    element elements[100], element e){
+        element elements[100], element e){
     static int index = 1; // start at 1. 0 is invalid
     for (int i = 0; i < 100; i++) {
         if (elements[i].active == 0) {
@@ -299,16 +299,16 @@ float point_rect_dist(vec2 p, rect r) {
     // horizontal distance
     float dx = fmax(r.x - p.x, 0.0f);
     dx = fmax(dx, p.x - (r.x + r.width));
-    
+
     // vertical distance
     float dy = fmax(r.y - p.y, 0.0f);
     dy = fmax(dy, p.y - (r.y + r.height));
-    
+
     return sqrtf(dx*dx + dy*dy);
 }
 bool point_in_rect(vec2 p, rect r) {
     return p.x >= r.x && p.x <= r.x + r.width &&
-           p.y >= r.y && p.y <= r.y + r.height;
+        p.y >= r.y && p.y <= r.y + r.height;
 }
 bool circle_rect_intersect(vec2 c, float r, rect rect) {
     float closest_x = fmax(rect.x, fmin(c.x, rect.x + rect.width));
@@ -328,9 +328,9 @@ bool line_intersect(vec2 p1, vec2 p2, vec2 q1, vec2 q2) {
     float s2_y = q2.y - q1.y;
 
     float s = (-s1_y * (p1.x - q1.x) + s1_x * (p1.y - q1.y)) /
-              (-s2_x * s1_y + s1_x * s2_y);
+        (-s2_x * s1_y + s1_x * s2_y);
     float t = ( s2_x * (p1.y - q1.y) - s2_y * (p1.x - q1.x)) /
-              (-s2_x * s1_y + s1_x * s2_y);
+        (-s2_x * s1_y + s1_x * s2_y);
 
     return s >= 0 && s <= 1 && t >= 0 && t <= 1;
 }
@@ -427,81 +427,81 @@ int projectile_body_hit(vec2 p, float r, rect body, vec2 prev_pos, float* out_di
 }
 
 /* void dbg_table(lua_State* L, int index) {
-    if (!lua_istable(L, index)) {
-        printf("Not a table\n");
-        return;
-    }
+   if (!lua_istable(L, index)) {
+   printf("Not a table\n");
+   return;
+   }
 
-    lua_pushnil(L); // first key
-    printf("Table contents:\n");
-    while (lua_next(L, index)) {
-        // key at -2, value at -1
-        const char* k = lua_tostring(L, -2);
-        if (lua_isstring(L, -1)) {
-            printf("  %s = %s\n", k, lua_tostring(L, -1));
-        } else if (lua_isnumber(L, -1)) {
-            printf("  %s = %f\n", k, lua_tonumber(L, -1));
-        } else if (lua_isfunction(L, -1)) {
-            printf("  %s = <function>\n", k);
-        } else if (lua_istable(L, -1)) {
-            printf("  %s = <table>\n", k);
-        } else {
-            printf("  %s = <other>\n", k);
-        }
-        lua_pop(L, 1); // remove value, leave key for next
-    }
+   lua_pushnil(L); // first key
+   printf("Table contents:\n");
+   while (lua_next(L, index)) {
+// key at -2, value at -1
+const char* k = lua_tostring(L, -2);
+if (lua_isstring(L, -1)) {
+printf("  %s = %s\n", k, lua_tostring(L, -1));
+} else if (lua_isnumber(L, -1)) {
+printf("  %s = %f\n", k, lua_tonumber(L, -1));
+} else if (lua_isfunction(L, -1)) {
+printf("  %s = <function>\n", k);
+} else if (lua_istable(L, -1)) {
+printf("  %s = <table>\n", k);
+} else {
+printf("  %s = <other>\n", k);
+}
+lua_pop(L, 1); // remove value, leave key for next
+}
 } */
 /* int script_init(lua_State* L, int script_ref, int owner_handle) {
-    // 1. Create instance table
-    lua_newtable(L); // stack: instance
+// 1. Create instance table
+lua_newtable(L); // stack: instance
 
-    // 2. Optional: attach the script table inside the instance
-    lua_rawgeti(L, LUA_REGISTRYINDEX, script_ref); // stack: instance, script
-    lua_setfield(L, -2, "script");                // instance.script = script; stack: instance
+// 2. Optional: attach the script table inside the instance
+lua_rawgeti(L, LUA_REGISTRYINDEX, script_ref); // stack: instance, script
+lua_setfield(L, -2, "script");                // instance.script = script; stack: instance
 
-    // 3. Store the instance table as a ref
-    int instance_ref = luaL_ref(L, LUA_REGISTRYINDEX); // pops the instance
+// 3. Store the instance table as a ref
+int instance_ref = luaL_ref(L, LUA_REGISTRYINDEX); // pops the instance
 
-    // call init if it exists
-    lua_getfield(L, -1, "init"); // stack: script, init_function
-    if (lua_isfunction(L, -1)) {
-        // push instance first
-        lua_rawgeti(L, LUA_REGISTRYINDEX, instance_ref); // self
-        lua_pushinteger(L, owner_handle);               // owner
-        lua_pushinteger(L, script_ref);                // optional script ref
+// call init if it exists
+lua_getfield(L, -1, "init"); // stack: script, init_function
+if (lua_isfunction(L, -1)) {
+// push instance first
+lua_rawgeti(L, LUA_REGISTRYINDEX, instance_ref); // self
+lua_pushinteger(L, owner_handle);               // owner
+lua_pushinteger(L, script_ref);                // optional script ref
 
-        if (lua_pcall(L, 3, 0, 0) != LUA_OK) {
-            printf("Lua init error: %s\n", lua_tostring(L, -1));
-            lua_pop(L, 1);
-        }
-    } else {
-        lua_pop(L, 1); // pop non-function
-        err("No ini.t");
-        panic("0");
-    }
+if (lua_pcall(L, 3, 0, 0) != LUA_OK) {
+printf("Lua init error: %s\n", lua_tostring(L, -1));
+lua_pop(L, 1);
+}
+} else {
+lua_pop(L, 1); // pop non-function
+err("No ini.t");
+panic("0");
+}
 
-    lua_pop(L, 1); // pop script
+lua_pop(L, 1); // pop script
 
-    return instance_ref;
+return instance_ref;
 }
 // Pushes the function from a script table by registry ref
 // Returns 1 on success (function pushed), 0 on failure
 int get_lua_script_function(lua_State* L, int script_ref, const char* func_name) {
-    // 1. push script table
-    lua_rawgeti(L, LUA_REGISTRYINDEX, script_ref); // stack: script
+// 1. push script table
+lua_rawgeti(L, LUA_REGISTRYINDEX, script_ref); // stack: script
 
-    // 2. get the requested function
-    lua_getfield(L, -1, func_name);               // stack: script, func
+// 2. get the requested function
+lua_getfield(L, -1, func_name);               // stack: script, func
 
-    if (!lua_isfunction(L, -1)) {
-        lua_pop(L, 2); // pop script table and non-function value
-        err("'%s' is not a function in script %d", func_name, script_ref);
-        return 0;
-    }
+if (!lua_isfunction(L, -1)) {
+lua_pop(L, 2); // pop script table and non-function value
+err("'%s' is not a function in script %d", func_name, script_ref);
+return 0;
+}
 
-    // At this point, the function is on top of the stack
-    // The script table is still below it in case you need it
-    return 1;
+// At this point, the function is on top of the stack
+// The script table is still below it in case you need it
+return 1;
 }*/
 // instance metatable contains script ref
 
@@ -555,10 +555,11 @@ entity* init_and_add_entity(game* game, float h, char* path) {
 }
 
 int main(void) {
+    float zoom = 2;
     printf("Hello, World!");
     // init env, window and lua
     load_env(".env");
-    InitWindow(winw, winh, "Hello Raylib");
+    InitWindow(_winw, _winh, "Hello Raylib");
     // SetTargetFPS(60);
     // register functions
     // register_engine(L);
@@ -612,27 +613,27 @@ int main(void) {
 
     printf("Player :%s\n", get_env("PLAYER_PATH"));
     /*
-    entity* enemy = init_and_add_entity(&game,
-            90.0f,get_env("ENEMY1"));
-    enemy->atk = 50;
-    enemy->health = 230;
-    enemy->max_health = 230;
-    enemy->body.x += PLAYER_SPEED;
-    enemy->body.y += PLAYER_SPEED;
-    enemy = init_and_add_entity(&game,
-            95.0f,get_env("ENEMY2"));
-    enemy->atk = 50;
-    enemy->health = 230;
-    enemy->max_health = 230;
-    enemy->body.x  += -100;
-    enemy->body.y  += 150;
-    enemy = init_and_add_entity(&game,
-            200.0f,get_env("ENEMY3"));
-    enemy->atk = PLAYER_SPEED;
-    enemy->health = 1030;
-    enemy->max_health = 1030;
-    enemy->body.x += -100;
-    enemy->body.y += -350;*/
+       entity* enemy = init_and_add_entity(&game,
+       90.0f,get_env("ENEMY1"));
+       enemy->atk = 50;
+       enemy->health = 230;
+       enemy->max_health = 230;
+       enemy->body.x += PLAYER_SPEED;
+       enemy->body.y += PLAYER_SPEED;
+       enemy = init_and_add_entity(&game,
+       95.0f,get_env("ENEMY2"));
+       enemy->atk = 50;
+       enemy->health = 230;
+       enemy->max_health = 230;
+       enemy->body.x  += -100;
+       enemy->body.y  += 150;
+       enemy = init_and_add_entity(&game,
+       200.0f,get_env("ENEMY3"));
+       enemy->atk = PLAYER_SPEED;
+       enemy->health = 1030;
+       enemy->max_health = 1030;
+       enemy->body.x += -100;
+       enemy->body.y += -350;*/
     entity* enemy = entity_init_basic_enemy(&game);
     enemy->body.x  += -100;
     enemy->body.y  += 150;
@@ -651,8 +652,8 @@ int main(void) {
 
 
     int CLICK_TO_MOVE = 0;
-    int range_v = (int)winh/(cellh)/2+2;
-    int range_h = (int)winw/(cellw)/2+2;
+    int range_v = (int)screenh/(cellh)/2+2;
+    int range_h = (int)screenw/(cellw)/2+2;
 
     dbg("Player index %d.", game.player_handle);
     int draw_logs = 1;
@@ -662,6 +663,7 @@ int main(void) {
     game.camera= &camera;
     vec2  player_dest = rect_pos(player->body);
     game.move_to_dest = 0;
+    RenderTexture2D canvas = LoadRenderTexture(screenw, screenh);
     while (!WindowShouldClose()) {
         // dt
         double now = get_time();
@@ -670,7 +672,7 @@ int main(void) {
         game.dt = dt;
         game.mouse_pos = GetMousePosition();
         player->direction = vec2norm(vec2sub(game.mouse_pos,
-                    _vec((float)winw/2, (float)winh/2)));
+                    _vec((float)_winw/2, (float)_winh/2)));
         if (CLICK_TO_MOVE) {
             if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT)) {
                 player_dest = unapply_camera(game.mouse_pos, *game.camera);
@@ -754,11 +756,11 @@ int main(void) {
             entity_ability(&game, game.player_handle, 0);
         }
 
-        camera.x = player->body.x + player->body.width/2 - (float)winw/2;
-        camera.y = player->body.y + player->body.height/2 - (float)winh/2;
-        camera.width = winw;
-        camera.height= winh;
-        BeginDrawing();
+        camera.x = player->body.x + player->body.width/2 - (float)screenw/2;
+        camera.y = player->body.y + player->body.height/2 - (float)screenh/2;
+        camera.width = screenw;
+        camera.height= screenh;
+        BeginTextureMode(canvas);
         ClearBackground(BLACK);
         // draw bg
         {
@@ -776,13 +778,13 @@ int main(void) {
                     if (map.tiles[j*map.cols+i].n < 0 ||
                             map.tiles[j*map.cols+i].n >= 3) {
                         panic("more/less than 3/0 map %d (ij %d %d)",
-                            map.tiles[j*map.cols+i].n, i, j);
+                                map.tiles[j*map.cols+i].n, i, j);
                     }
                     DrawTexturePro(tiles,
-                    _rect(304+srccellw*map.tiles[j*map.cols+i].n, 16,
-                        srccellw,srccellh),
-                    _rect(draw.x, draw.y, cellw, cellh),
-                    _vec(0,0),0,WHITE);
+                            _rect(304+srccellw*map.tiles[j*map.cols+i].n, 16,
+                                srccellw,srccellh),
+                            _rect(draw.x, draw.y, cellw, cellh),
+                            _vec(0,0),0,WHITE);
                 }
             }
         }
@@ -824,23 +826,26 @@ int main(void) {
         DrawCircleV(apply_camera(vec2add(player_dest,
                         vec2scale(rect_size(player->body), 0.5)),
                     *game.camera), 4, WHITE);
-        DrawFPS(10, 10);
-        char b[1024];
-
-        snprintf(b, 1024,"Lua memory    : %d KB\n"
-                "dt                     : %.10lf\n"
-                "player (to move %d) x/y: %.0f, %.0f\n"
-                "movement mode          : %s\n"
-                "elements               : %d\n",
-                0, // lua_gc(L, LUA_GCCOUNT),
-                dt, game.move_to_dest, player->body.x, player->body.y,
-                CLICK_TO_MOVE ? "click to move" : "wasd",
-                global_elements_count
-                );
-        DrawText(b, 10, 50, 20, WHITE);
         // draw abilities
         // start at bottom row
-        float y = winh-10-ABILITY_UI_SIZE;
+        // use window shi fo ui
+        EndTextureMode();
+        BeginDrawing();
+        // Draw the texture onto your rect position
+        {
+            float w = (float)screenw/zoom;
+            float h = (float)screenh/zoom;
+            float x = ((float)screenw/2)*(zoom-1) - w/2;
+            float y = ((float)screenh/2)*(zoom-1) - h/2;
+            DrawTexturePro(
+                    canvas.texture,
+                    _rect(x, y, w, -h), // negative height flips Y (OpenGL quirk)
+                    _rect(0, 0, _winw, _winh),
+                    _vec(0,0), 0,
+                    WHITE
+                    );
+        }
+        float y = _winw-10-ABILITY_UI_SIZE;
         for (int i = 0; i < MAX_ABILITIES; i++) {
             int j = i%(MAX_ABILITIES/2); // row
             int k = i/(MAX_ABILITIES/2); // col
@@ -873,6 +878,19 @@ int main(void) {
                 }
             }
         }
+        DrawFPS(10, 10);
+        char b[1024];
+        snprintf(b, 1024,"Lua memory    : %d KB\n"
+                "dt                     : %.10lf\n"
+                "player (to move %d) x/y: %.0f, %.0f\n"
+                "movement mode          : %s\n"
+                "elements               : %d\n",
+                0, // lua_gc(L, LUA_GCCOUNT),
+                dt, game.move_to_dest, player->body.x, player->body.y,
+                CLICK_TO_MOVE ? "click to move" : "wasd",
+                global_elements_count
+                );
+        DrawText(b, 10, 30, 20, WHITE);
         EndDrawing();
         for (int i = 0; i < game.entities.count; i++) {
             entity* e = game.entities.data[i];
@@ -890,18 +908,19 @@ int main(void) {
         }
     }
     for (int i = 0; i < game.entities.count; i++) {
-        UnloadTexture(game.entities.data[i]->image);
-    }
-    for (int i = 0; i < game.loaded_count; i++) {
-        free(game.loaded_scripts[i].path);
-    }
-    free(game.logs);
-    free(game.entities.data);
-    free(game.elements);
-    game.entities.data = 0;
-    arena_free(&a);
-    arena_free(&game.cycle_arena);
-    arena_free(&game.chat_arena);
-    free(map.tiles);
-    return 0;
+    UnloadTexture(game.entities.data[i]->image);
+}
+for (int i = 0; i < game.loaded_count; i++) {
+    free(game.loaded_scripts[i].path);
+}
+UnloadRenderTexture(canvas);
+free(game.logs);
+free(game.entities.data);
+free(game.elements);
+game.entities.data = 0;
+arena_free(&a);
+arena_free(&game.cycle_arena);
+arena_free(&game.chat_arena);
+free(map.tiles);
+return 0;
 }
