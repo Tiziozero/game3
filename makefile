@@ -6,7 +6,7 @@ all:
 	gcc -ggdb -o prog $(SRC) $(INCLUDES) $(LIBS)
 	./prog
 win:
-	zig cc -o prog.exe $(SRC) -L. -lraylib
+	zig cc -o prog.exe $(SRC)  $(INCLUDES) $(LIBS)
 	./prog.exe
 check_leaks:
 	valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes -s ./prog
