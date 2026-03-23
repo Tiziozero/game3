@@ -12,7 +12,7 @@ function M.init(self, owner, ref)
     self.range = 800;
     self.name = "BigBoy"
     self.desc = "Same is the guy that hit Japan. Now in orange!"
-    self.icon = "imgs/icon6.png"
+    self.icon = get_env("ICON2");
     self.cooldown_time = 10;
     self.cooldown = 0.0;
 end

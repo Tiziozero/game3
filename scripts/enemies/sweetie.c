@@ -24,7 +24,7 @@ entity* entity_init_sweetie(game * game) {
     if (!ret) panic("Failed to allocate memory");
     enemy_sweetie p = {0};
     entity e;
-    if (!init_entity(&e, 120.0f, getenv("ENEMY4"))) {
+    if (!init_entity(&e, 120.0f, get_env("ENEMY4"))) {
         panic("Failed to create entity?");
         return NULL;
     }

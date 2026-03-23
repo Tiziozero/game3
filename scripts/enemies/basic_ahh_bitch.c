@@ -24,7 +24,7 @@ entity* entity_init_basic_enemy(game * game) {
     if (!ret) panic("Failed to allocate memory");
     basic_enemy p = {0};
     entity e;
-    if (!init_entity(&e, 80.0f, getenv("ENEMY1"))) {
+    if (!init_entity(&e, 80.0f, get_env("ENEMY1"))) {
         panic("Failed to create entity?");
         return NULL;
     }

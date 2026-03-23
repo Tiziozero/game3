@@ -55,7 +55,7 @@ ability ability_init_big_boy(game * game, int owner_handle) {
     i.act = big_boy;
     i.description = "big boy already whiped a city once, he can do it again.";
     i.name = "big boy";
-    i.texture = LoadTexture("imgs/icon6.png");
+    i.texture = LoadTexture(get_env("ICON4"));
     i.update = big_boy_ability_update;
     i.draw = default_draw;
     i.cooldown = 0;

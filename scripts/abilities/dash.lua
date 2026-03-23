@@ -11,7 +11,7 @@ function M.init(self, owner, ref)
     self.range = 400;
     self.name = "test dash ability"
     self.desc = "test ability to test dash"
-    self.icon = "imgs/icon4.png"
+    self.icon = get_env("ICON3");
     self.cooldown_time = 3;
     self.cooldown = 0.0;
 end

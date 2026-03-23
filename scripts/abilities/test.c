@@ -54,7 +54,7 @@ ability ability_init_test(game * game, int owner_handle) {
     i.act = ability_test_act;
     i.description = "test ability to see how things work in c rather than lua.";
     i.name = "test ability";
-    i.texture = LoadTexture("imgs/icon5.png");
+    i.texture = LoadTexture(get_env("ICON4"));
     i.update = test_update;
     i.draw = default_draw;
     i.cooldown = 0;

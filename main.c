@@ -6,10 +6,13 @@
 #include <stdlib.h>
 #include <time.h>
 #include <unistd.h>
-#include "external/lua/lua.h"
-#include "external/lua/lauxlib.h"
-#include "external/lua/lualib.h"
 #include "game.h"
+char* get_env(char* path) {
+    dbg("Getting env var %s...", path);
+    char* r = getenv(path);
+    dbg("Got env var %s.", r);
+    return r;
+}
 // /home/kleidi/.tmp/Konachan.com - 346965 sample.adadjpg.jpg
 
 int load_env(const char *filename);
@@ -155,7 +158,7 @@ entity* entities_remove_entity(dynarr_entity* entities, int index) {
     return removed;
 }
     // Map: script path -> LUA_REF
-int get_lua_script_function(lua_State* L, int script_ref, const char* func_name);
+// int get_lua_script_function(lua_State* L, int script_ref, const char* func_name);
 element* get_element(game* g, int handle) {
 
     int idx = handle_index(handle);
@@ -349,7 +352,7 @@ bool line_rect_intersect(vec2 p1, vec2 p2, rect r) {
 
     return false;
 }
-int l_ability_act(lua_State* L, int script_ref, int instance_ref);
+// int l_ability_act(lua_State* L, int script_ref, int instance_ref);
 int entity_ability(game* game, int handle, int ability) {
     entity* e = find_entity(game, handle);
     if (!e) {
@@ -369,7 +372,7 @@ int entity_ability(game* game, int handle, int ability) {
         panic("unhandeled");
     }
     return 1;
-}
+} 
 int ability_act(game* game, ability ability) {
     return ability.act(game, ability.payload);
 }
@@ -423,7 +426,7 @@ int projectile_body_hit(vec2 p, float r, rect body, vec2 prev_pos, float* out_di
     return 0; // else no intersection
 }
 
-void dbg_table(lua_State* L, int index) {
+/* void dbg_table(lua_State* L, int index) {
     if (!lua_istable(L, index)) {
         printf("Not a table\n");
         return;
@@ -447,9 +450,8 @@ void dbg_table(lua_State* L, int index) {
         }
         lua_pop(L, 1); // remove value, leave key for next
     }
-}
-int script_init(lua_State* L, int script_ref, int owner_handle)
-{
+} */
+/* int script_init(lua_State* L, int script_ref, int owner_handle) {
     // 1. Create instance table
     lua_newtable(L); // stack: instance
 
@@ -484,8 +486,7 @@ int script_init(lua_State* L, int script_ref, int owner_handle)
 }
 // Pushes the function from a script table by registry ref
 // Returns 1 on success (function pushed), 0 on failure
-int get_lua_script_function(lua_State* L, int script_ref, const char* func_name)
-{
+int get_lua_script_function(lua_State* L, int script_ref, const char* func_name) {
     // 1. push script table
     lua_rawgeti(L, LUA_REGISTRYINDEX, script_ref); // stack: script
 
@@ -501,10 +502,8 @@ int get_lua_script_function(lua_State* L, int script_ref, const char* func_name)
     // At this point, the function is on top of the stack
     // The script table is still below it in case you need it
     return 1;
-}
+}*/
 // instance metatable contains script ref
-
-
 
 collisions_ret_t* entities_line_intersect(vec2 p1, vec2 p2, float r, int* _count) {
     int cap = 10;
@@ -556,13 +555,11 @@ entity* init_and_add_entity(game* game, float h, char* path) {
 }
 
 int main(void) {
-
+    printf("Hello, World!");
     // init env, window and lua
     load_env(".env");
     InitWindow(winw, winh, "Hello Raylib");
     // SetTargetFPS(60);
-    lua_State *L = luaL_newstate();
-    luaL_openlibs(L);
     // register functions
     // register_engine(L);
 
@@ -577,21 +574,18 @@ int main(void) {
         }
     }
 
-    Texture tiles = LoadTexture(getenv("TILES"));
+    Texture tiles = LoadTexture(get_env("TILES"));
     int cols = tiles.width/16;
     int rows = tiles.height/16;
 
     game game;
     memset(&game, 0, sizeof(game));
     setgame(&game);
-    game.L = L;
     game.elements_cap = MAX_ELEMENTS;
     game.elements = calloc(1,game.elements_cap*sizeof(element));
     for (int i = 0; i < game.elements_cap; i++) {
         game.elements[i].handle = 0;
         game.elements[i].active = 0;
-        game.elements[i].instance_ref = LUA_NOREF;
-        game.elements[i].ref = LUA_NOREF;
         game.elements[i].pos = _vec(0,0);
     }
 
@@ -603,7 +597,7 @@ int main(void) {
     game.entities = _entities;
     // take reference to player
     entity _player;
-    if (!init_entity(&_player, 80, getenv("PLAYER_PATH"))) panic("Failed to init player");
+    if (!init_entity(&_player, 80, get_env("PLAYER_PATH"))) panic("Failed to init player");
     entity* player = game_new_entity(&game, _player);
 
     game.player = player;
@@ -616,24 +610,24 @@ int main(void) {
     init_ability(&game, game.player_handle,0, ability_kind_test);
     init_ability(&game, game.player_handle,1, ability_kind_big_boy);
 
-    printf("Player :%s\n", getenv("PLAYER_PATH"));
+    printf("Player :%s\n", get_env("PLAYER_PATH"));
     /*
     entity* enemy = init_and_add_entity(&game,
-            90.0f,getenv("ENEMY1"));
+            90.0f,get_env("ENEMY1"));
     enemy->atk = 50;
     enemy->health = 230;
     enemy->max_health = 230;
     enemy->body.x += PLAYER_SPEED;
     enemy->body.y += PLAYER_SPEED;
     enemy = init_and_add_entity(&game,
-            95.0f,getenv("ENEMY2"));
+            95.0f,get_env("ENEMY2"));
     enemy->atk = 50;
     enemy->health = 230;
     enemy->max_health = 230;
     enemy->body.x  += -100;
     enemy->body.y  += 150;
     enemy = init_and_add_entity(&game,
-            200.0f,getenv("ENEMY3"));
+            200.0f,get_env("ENEMY3"));
     enemy->atk = PLAYER_SPEED;
     enemy->health = 1030;
     enemy->max_health = 1030;
@@ -732,7 +726,7 @@ int main(void) {
         while ((k = GetKeyPressed())) {
             if (k == KEY_SPACE) {
             } else if (k == KEY_I) {
-                printf("Lua memory: %d KB\n", lua_gc(L, LUA_GCCOUNT));
+                // printf("Lua memory: %d KB\n", lua_gc(L, LUA_GCCOUNT));
             } else if (k == KEY_F) {
                 game_log(&game, "Welp!");
             } else if (k == KEY_TAB) {
@@ -838,7 +832,7 @@ int main(void) {
                 "player (to move %d) x/y: %.0f, %.0f\n"
                 "movement mode          : %s\n"
                 "elements               : %d\n",
-                lua_gc(L, LUA_GCCOUNT),
+                0, // lua_gc(L, LUA_GCCOUNT),
                 dt, game.move_to_dest, player->body.x, player->body.y,
                 CLICK_TO_MOVE ? "click to move" : "wasd",
                 global_elements_count
@@ -909,6 +903,5 @@ int main(void) {
     arena_free(&game.cycle_arena);
     arena_free(&game.chat_arena);
     free(map.tiles);
-    lua_close(L);
     return 0;
 }

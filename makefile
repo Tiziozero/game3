@@ -1,8 +1,7 @@
 SRC=main.c env.c game.c scripts/abilities/*.c scripts/projectiles/*.c scripts/enemies/*.c
 INCLIDES=
 INCLUDES += -Iexternal/lua
-LIBS=-L. -lraylib
-LIBS += external/lua/liblua.a -ldl -lm
+LIBS=-L. -lraylib -lm
 all:
 	gcc -ggdb -o prog $(SRC) $(INCLUDES) $(LIBS)
 	./prog
