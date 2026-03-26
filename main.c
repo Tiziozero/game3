@@ -542,7 +542,7 @@ collisions_ret_t* entities_line_intersect(vec2 p1, vec2 p2, float r, int* _count
 
 int init_ability(game* game, int entity_handle, int ability_index, ability_kind ak) {
     ability_init_handler a = get_ability(ak);
-    ability i = a(game, entity_handle);
+    ability i = a(game, ability_index, entity_handle);
     i.active = 1;
     find_entity(game, entity_handle)->abilities[ability_index] = i;
     return 1;
@@ -560,7 +560,7 @@ int main(void) {
     // init env, window and lua
     load_env(".env");
     InitWindow(_winw, _winh, "Hello Raylib");
-    // SetTargetFPS(60);
+    SetTargetFPS(60);
     // register functions
     // register_engine(L);
 
@@ -663,7 +663,7 @@ int main(void) {
     game.camera= &camera;
     vec2  player_dest = rect_pos(player->body);
     game.move_to_dest = 0;
-    RenderTexture2D canvas = LoadRenderTexture(screenw, screenh);
+    // RenderTexture2D canvas = LoadRenderTexture(screenw, screenh);
     while (!WindowShouldClose()) {
         // dt
         double now = get_time();
@@ -760,7 +760,8 @@ int main(void) {
         camera.y = player->body.y + player->body.height/2 - (float)screenh/2;
         camera.width = screenw;
         camera.height= screenh;
-        BeginTextureMode(canvas);
+        // BeginTextureMode(canvas);
+        BeginDrawing();
         ClearBackground(BLACK);
         // draw bg
         {
@@ -823,29 +824,43 @@ int main(void) {
                         20, WHITE);
             }
         }
-        DrawCircleV(apply_camera(vec2add(player_dest,
-                        vec2scale(rect_size(player->body), 0.5)),
-                    *game.camera), 4, WHITE);
         // draw abilities
         // start at bottom row
         // use window shi fo ui
-        EndTextureMode();
-        BeginDrawing();
+        // EndTextureMode();
+        // BeginDrawing();
         // Draw the texture onto your rect position
-        {
-            float w = (float)screenw/zoom;
-            float h = (float)screenh/zoom;
-            float x = ((float)screenw/2)*(zoom-1) - w/2;
-            float y = ((float)screenh/2)*(zoom-1) - h/2;
-            DrawTexturePro(
-                    canvas.texture,
-                    _rect(x, y, w, -h), // negative height flips Y (OpenGL quirk)
-                    _rect(0, 0, _winw, _winh),
-                    _vec(0,0), 0,
-                    WHITE
-                    );
-        }
-        float y = _winw-10-ABILITY_UI_SIZE;
+        /* {
+           float w = (float)screenw/zoom;
+           float h = (float)screenh/zoom;
+           float x = ((float)screenw/2)*(zoom-1) - w/2;
+           float y = ((float)screenh/2)*(zoom-1) - h/2;
+           DrawTexturePro(
+           canvas.texture,
+           _rect(x, y, w, -h), // negative height flips Y (OpenGL quirk)
+           _rect(0, 0, _winw, _winh),
+           _vec(0,0), 0,
+           WHITE
+           );
+           } */
+        DrawCircleV(apply_camera(vec2add(player_dest,
+                        vec2scale(rect_size(player->body), 0.5)),
+                    *game.camera), 4, WHITE);
+        DrawFPS(10, 10);
+        char b[1024];
+        snprintf(b, 1024,"Lua memory    : %d KB\n"
+                "dt                     : %.10lf\n"
+                "player (to move %d) x/y: %.0f, %.0f\n"
+                "movement mode          : %s\n"
+                "elements               : %d\n",
+                0, // lua_gc(L, LUA_GCCOUNT),
+                dt, game.move_to_dest, player->body.x, player->body.y,
+                CLICK_TO_MOVE ? "click to move" : "wasd",
+                global_elements_count
+                );
+        DrawText(b, 10, 30, 20, WHITE);
+        float y = _winh-10-ABILITY_UI_SIZE;
+        // dbg("y %f", y);
         for (int i = 0; i < MAX_ABILITIES; i++) {
             int j = i%(MAX_ABILITIES/2); // row
             int k = i/(MAX_ABILITIES/2); // col
@@ -860,9 +875,10 @@ int main(void) {
                         ABILITY_UI_SIZE, ABILITY_UI_SIZE,
                         GetColor(0x444444ff));
             } else {
+                // dbg("Active %f %f", xoffset, yoffset);
                 float cd = ability.cooldown;
                 Texture t = ability.texture;
-                DrawTexturePro(t,_rect(0,0,t.width,t.height),
+                DrawTexturePro(t,_rect(0,0,(float)t.width,(float)t.height),
                         _rect(xoffset, yoffset,
                             ABILITY_UI_SIZE, ABILITY_UI_SIZE),
                         _vec(0,0),0,WHITE);
@@ -878,19 +894,6 @@ int main(void) {
                 }
             }
         }
-        DrawFPS(10, 10);
-        char b[1024];
-        snprintf(b, 1024,"Lua memory    : %d KB\n"
-                "dt                     : %.10lf\n"
-                "player (to move %d) x/y: %.0f, %.0f\n"
-                "movement mode          : %s\n"
-                "elements               : %d\n",
-                0, // lua_gc(L, LUA_GCCOUNT),
-                dt, game.move_to_dest, player->body.x, player->body.y,
-                CLICK_TO_MOVE ? "click to move" : "wasd",
-                global_elements_count
-                );
-        DrawText(b, 10, 30, 20, WHITE);
         EndDrawing();
         for (int i = 0; i < game.entities.count; i++) {
             entity* e = game.entities.data[i];
@@ -908,19 +911,19 @@ int main(void) {
         }
     }
     for (int i = 0; i < game.entities.count; i++) {
-    UnloadTexture(game.entities.data[i]->image);
-}
-for (int i = 0; i < game.loaded_count; i++) {
-    free(game.loaded_scripts[i].path);
-}
-UnloadRenderTexture(canvas);
-free(game.logs);
-free(game.entities.data);
-free(game.elements);
-game.entities.data = 0;
-arena_free(&a);
-arena_free(&game.cycle_arena);
-arena_free(&game.chat_arena);
-free(map.tiles);
-return 0;
+        UnloadTexture(game.entities.data[i]->image);
+    }
+    for (int i = 0; i < game.loaded_count; i++) {
+        free(game.loaded_scripts[i].path);
+    }
+    // UnloadRenderTexture(canvas);
+    free(game.logs);
+    free(game.entities.data);
+    free(game.elements);
+    game.entities.data = 0;
+    arena_free(&a);
+    arena_free(&game.cycle_arena);
+    arena_free(&game.chat_arena);
+    free(map.tiles);
+    return 0;
 }

@@ -2,7 +2,7 @@
 #include "../../abilities.h"
 
 typedef struct {
-    int owner_handle;
+    int owner_handle, index;
     float base_damage, range, speed;
     double cooldown, cooldown_time;
 } big_boy_payload;
@@ -36,14 +36,19 @@ int big_boy_ability_update(game* game, void* payload) {
     big_boy_payload* p = payload;
     p->cooldown -= game->dt;
     if (p->cooldown <= 0) p->cooldown = 0;
+    big_boy_payload* self = (big_boy_payload*)payload;
+    ability* a = &find_entity(game, self->owner_handle)->abilities[self->index];
+    a->cooldown_time = self->cooldown_time;
+    a->cooldown = self->cooldown;
     return 1;
 }
-ability ability_init_big_boy(game * game, int owner_handle) {
+ability ability_init_big_boy(game * game, int index, int owner_handle) {
     big_boy_payload* ret = calloc(1,
             sizeof(big_boy_payload));
     if (!ret) panic("Failed to allocate memory");
     big_boy_payload p = {0};
     p.owner_handle = owner_handle;
+    p.index = index;
     p.range = 300.0f;
     p.speed = 500.0f;
     p.base_damage = 50.0f;

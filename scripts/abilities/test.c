@@ -2,7 +2,7 @@
 #include "../../abilities.h"
 
 typedef struct {
-    int owner_handle;
+    int owner_handle, index;
     float base_damage, range, speed;
     double cooldown, cooldown_time;
 } ability_test_payload;
@@ -35,14 +35,19 @@ int test_update(game* game, void* payload) {
     ability_test_payload* p = payload;
     p->cooldown -= game->dt;
     if (p->cooldown <= 0) p->cooldown = 0;
+    ability_test_payload* self = (ability_test_payload*)payload;
+    ability* a = &find_entity(game, self->owner_handle)->abilities[self->index];
+    a->cooldown_time = self->cooldown_time;
+    a->cooldown = self->cooldown;
     return 1;
 }
-ability ability_init_test(game * game, int owner_handle) {
+ability ability_init_test(game * game, int index, int owner_handle) {
     ability_test_payload* ret = calloc(1,
             sizeof(ability_test_payload));
     if (!ret) panic("Failed to allocate memory");
     ability_test_payload p = {0};
     p.owner_handle = owner_handle;
+    p.index = index;
     p.range = 500.0f;
     p.speed = 800.0f;
     p.base_damage = 15.0f;
@@ -55,6 +60,7 @@ ability ability_init_test(game * game, int owner_handle) {
     i.description = "test ability to see how things work in c rather than lua.";
     i.name = "test ability";
     i.texture = LoadTexture(get_env("ICON4"));
+    dbg("%d %d %d ability texture.", i.texture.width, i.texture.height, i.texture.id);
     i.update = test_update;
     i.draw = default_draw;
     i.cooldown = 0;

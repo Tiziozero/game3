@@ -34,7 +34,7 @@ entity* entity_init_sweetie(game * game) {
     p.time = 1.5f;
     *ret = p;
     e.payload = ret;
-    e.atk = 200;
+    e.atk = 120;
     e.health = 1500;
     e.max_health = 1500;
     e.def = 0;

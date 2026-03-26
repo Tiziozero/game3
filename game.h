@@ -24,8 +24,8 @@
 #define MAX_TEXTURES 100
 #define _winh 750
 #define _winw 1200
-#define screenw _winw*2
-#define screenh _winh*2
+#define screenw _winw
+#define screenh _winh
 #define PLAYER_SPEED 300
 #define ABILITY_UI_SIZE 60
 char* get_env(char* path);
@@ -48,10 +48,11 @@ typedef struct {
     char* name;
     int active;
     int ref, instance;
-    Texture texture;
+    Texture2D texture;
 } lua_item;
 
-typedef void(* init_handler)(game* game, int owner_handle);
+// ability index
+typedef void(* init_handler)(game* game, int index, int owner_handle);
 typedef int (*ability_act_handler)(game* game, void* payload);
 
 typedef struct {
@@ -59,7 +60,7 @@ typedef struct {
     char* name;
     char* description;
     void* payload;
-    Texture texture;
+    Texture2D texture;
     // call for payload
     // init_handler init;
     ability_act_handler act;
@@ -71,7 +72,7 @@ typedef struct {
     char* name;
     char* description;
     void* payload;
-    Texture texture;
+    Texture2D texture;
     double cooldown, cooldown_time;
     // call for payload
     // init_handler init;
@@ -151,7 +152,7 @@ struct  game{
     
     rect* camera;
 
-    Texture textures[MAX_TEXTURES];
+    Texture2D textures[MAX_TEXTURES];
     int texture_count;
     script_entry loaded_scripts[128]; // or dynamic map
     int loaded_count;
@@ -284,7 +285,7 @@ int basic_entity_draw(game* game, int handle, void* payload);
 
 
 #define a(n) ability_init_##n
-#define ab(n) ability  a(n)(game * game, int owner_handle);
+#define ab(n) ability  a(n)(game * game, int index, int owner_handle);
 #define b(n) ability_kind_##n
 #define bc(n) b(n),
 dec_ability(ab)
@@ -293,7 +294,7 @@ enum ability_kind{
     ability_kind_count,
 };
 #define c(n) if (k == b(n)) return a(n);
-typedef ability (*ability_init_handler)(game* game, int handle);
+typedef ability (*ability_init_handler)(game* game, int index, int handle);
 
 #define HANDLER_ENTRY(n) ability_init_##n,
 static ability_init_handler ability_table[] = {
